@@ -22,7 +22,7 @@ func NewGetProblemUseCase(problemRepo repository.ProblemRepository) *getProblemU
 }
 
 func (uc *getProblemUseCase) Execute(input GetProblemInput) (models.Problem, error) {
-	problem, err := uc.problemRepo.GetProblemByID(input.ID)
+	problem, err := uc.problemRepo.GetProblemByIDWithPreloaded(input.ID)
 	if err != nil {
 		return models.Problem{}, err
 	}

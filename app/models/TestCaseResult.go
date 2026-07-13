@@ -9,6 +9,7 @@ type TestCaseResult struct {
 	IsPassed     bool      `gorm:"not null" json:"is_passed"`
 	Verdict      string    `gorm:"not null" json:"verdict"`
 	RunTime      int       `gorm:"not null" json:"run_time"`
+	Feedback     *string   `gorm:"default:null" json:"feedback"`
 	ErrorMessage *string   `gorm:"default:null" json:"error_message"`
 	CreatedAt    time.Time `json:"created_at"`
 	UpdatedAt    time.Time `json:"updated_at"`

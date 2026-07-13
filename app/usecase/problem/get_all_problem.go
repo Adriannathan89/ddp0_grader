@@ -1,3 +1,10 @@
+package usecase
+
+import (
+	"ddp0_grader/app/models"
+	"ddp0_grader/app/repository"
+)
+
 type GetAllProblemsUseCase interface {
 	Execute() ([]models.Problem, error)
 }

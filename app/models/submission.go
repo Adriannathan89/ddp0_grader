@@ -6,8 +6,8 @@ type Submission struct {
 	ID              string           `gorm:"primaryKey" json:"id"`
 	ProblemID       string           `gorm:"not null" json:"problem_id"`
 	UserID          string           `gorm:"not null" json:"user_id"`
+	Status          string           `gorm:"default:'pending'" json:"status"`
 	SourceCode      string           `gorm:"not null" json:"source_code"`
-	Status          string           `gorm:"not null" json:"status"`
 	Score           int              `gorm:"not null" json:"score"`
 	RunTime         int              `gorm:"not null" json:"run_time"`
 	ErrorMessage    *string          `gorm:"default:null" json:"error_message"`
