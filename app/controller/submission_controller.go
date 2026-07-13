@@ -1,23 +1,13 @@
 package controller
 
 import (
-	"context"
 	"errors"
 	"io"
-	"log"
 	"net/http"
 	"path/filepath"
 	"strings"
-	"time"
 
-	"ddp0_grader/app/config"
-	"ddp0_grader/app/repository"
 	"ddp0_grader/app/usecase/grading"
-	problemUseCase "ddp0_grader/app/usecase/problem"
-	submissionUseCase "ddp0_grader/app/usecase/submission"
-	resultUseCase "ddp0_grader/app/usecase/testcaseresult"
-	"ddp0_grader/pkg/queue"
-	"ddp0_grader/pkg/runner"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -29,48 +19,36 @@ type SubmissionController struct {
 	grading grading.UseCase
 }
 
-func NewSubmissionController(
-	problemRepo repository.ProblemRepository,
-	submissionRepo repository.SubmissionRepository,
-	resultRepo repository.TestCaseResultRepository,
-) (*SubmissionController, error) {
-	jobQueue, err := queue.NewWithClient(config.RedisClient, queue.Config{
-		Stream:   "grader:jobs",
-		Group:    "grader-workers",
-		Consumer: "api-worker",
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	grader := runner.New(runner.Config{
-		Image:           "python:3.12-slim",
-		OutputLimit:     1 << 20,
-		DefaultTime:     2 * time.Second,
-		DefaultMemoryMB: 256,
-	})
-	gradingUseCase := grading.NewUseCase(
-		problemUseCase.NewGetProblemUseCase(problemRepo),
-		submissionUseCase.NewCreateSubmissionUseCase(submissionRepo),
-		submissionUseCase.NewUpdateSubmissionUseCase(submissionRepo),
-		resultUseCase.NewBatchCreateTestCaseResultUseCase(resultRepo),
-		jobQueue,
-		grader,
-	)
-
-	controller := &SubmissionController{grading: gradingUseCase}
-	go controller.startWorker(jobQueue)
-	return controller, nil
-}
-
-func (controller *SubmissionController) startWorker(jobQueue *queue.Queue) {
-	if err := jobQueue.WorkN(context.Background(), 10, controller.grading.GradeJob); err != nil && !errors.Is(err, context.Canceled) {
-		log.Printf("grader workers stopped: %v", err)
-	}
+func NewSubmissionController(grading grading.UseCase) *SubmissionController {
+	return &SubmissionController{grading: grading}
 }
 
 func (controller *SubmissionController) RegisterRoutes(router *gin.Engine) {
-	router.POST("/submissions/grade", controller.grade)
+	submission := router.Group("/submissions")
+	{
+		submission.POST("/grade", controller.grade)
+		submission.GET("/:id", controller.getByID)
+	}
+}
+
+func (controller *SubmissionController) getByID(c *gin.Context) {
+	id := strings.TrimSpace(c.Param("id"))
+	if id == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "submission id is required"})
+		return
+	}
+
+	submission, err := controller.grading.GetSubmission(c.Request.Context(), id)
+	if err != nil {
+		status := http.StatusInternalServerError
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			status = http.StatusNotFound
+		}
+		c.JSON(status, gin.H{"error": "submission not found"})
+		return
+	}
+
+	c.JSON(http.StatusOK, submission)
 }
 
 func (controller *SubmissionController) grade(c *gin.Context) {

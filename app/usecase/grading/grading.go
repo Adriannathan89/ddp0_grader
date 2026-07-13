@@ -6,9 +6,7 @@ import (
 	"time"
 
 	"ddp0_grader/app/models"
-	problemUseCase "ddp0_grader/app/usecase/problem"
-	submissionUseCase "ddp0_grader/app/usecase/submission"
-	resultUseCase "ddp0_grader/app/usecase/testcaseresult"
+	"ddp0_grader/app/repository"
 	"ddp0_grader/pkg/queue"
 	"ddp0_grader/pkg/runner"
 
@@ -23,79 +21,92 @@ type SubmitInput struct {
 
 type UseCase interface {
 	Submit(ctx context.Context, input SubmitInput) (models.Submission, error)
+	GetSubmission(ctx context.Context, id string) (models.Submission, error)
 	GradeJob(ctx context.Context, job queue.Job) error
 }
 
+type JobQueue interface {
+	Enqueue(ctx context.Context, job queue.Job) (string, error)
+}
+
+type Grader interface {
+	Run(ctx context.Context, submission *models.Submission, problem *models.Problem, testCases []models.TestCase) ([]runner.TestResult, error)
+}
+
 type useCase struct {
-	getProblem       problemUseCase.GetProblemUseCase
-	createSubmission submissionUseCase.CreateSubmissionUseCase
-	updateSubmission submissionUseCase.UpdateSubmissionUseCase
-	batchResults     resultUseCase.BatchCreateTestCaseResultUseCase
-	jobQueue         *queue.Queue
-	grader           *runner.Runner
+	problemRepo    repository.ProblemRepository
+	submissionRepo repository.SubmissionRepository
+	resultRepo     repository.TestCaseResultRepository
+	jobQueue       JobQueue
+	grader         Grader
 }
 
 func NewUseCase(
-	getProblem problemUseCase.GetProblemUseCase,
-	createSubmission submissionUseCase.CreateSubmissionUseCase,
-	updateSubmission submissionUseCase.UpdateSubmissionUseCase,
-	batchResults resultUseCase.BatchCreateTestCaseResultUseCase,
-	jobQueue *queue.Queue,
-	grader *runner.Runner,
+	problemRepo repository.ProblemRepository,
+	submissionRepo repository.SubmissionRepository,
+	resultRepo repository.TestCaseResultRepository,
+	jobQueue JobQueue,
+	grader Grader,
 ) UseCase {
 	return &useCase{
-		getProblem:       getProblem,
-		createSubmission: createSubmission,
-		updateSubmission: updateSubmission,
-		batchResults:     batchResults,
-		jobQueue:         jobQueue,
-		grader:           grader,
+		problemRepo:    problemRepo,
+		submissionRepo: submissionRepo,
+		resultRepo:     resultRepo,
+		jobQueue:       jobQueue,
+		grader:         grader,
 	}
 }
 
 func (uc *useCase) Submit(ctx context.Context, input SubmitInput) (models.Submission, error) {
-	problem, err := uc.getProblem.Execute(problemUseCase.GetProblemInput{ID: input.ProblemID})
+	problem, err := uc.problemRepo.GetProblemByIDWithPreloaded(input.ProblemID)
 	if err != nil {
 		return models.Submission{}, err
 	}
 
-	submission, err := uc.createSubmission.Execute(submissionUseCase.CreateSubmissionInput{
+	submission := models.Submission{
+		ID:         uuid.New().String(),
 		ProblemID:  problem.ID,
 		UserID:     input.UserID,
 		SourceCode: input.SourceCode,
-	})
-	if err != nil {
+		Status:     "queued",
+	}
+	if err := uc.submissionRepo.SaveSubmission(&submission); err != nil {
 		return models.Submission{}, err
 	}
 
 	_, err = uc.jobQueue.Enqueue(ctx, queue.Job{
 		ID:         submission.ID,
 		Submission: submission,
-		Problem:    problem,
+		Problem:    *problem,
 		TestCases:  problem.TestCases,
 	})
 	if err != nil {
 		message := "cannot enqueue grading job"
-		_, _ = uc.updateSubmission.Execute(submissionUseCase.UpdateSubmissionInput{
-			ID:           submission.ID,
-			Status:       "queue_error",
-			ErrorMessage: &message,
-		})
+		submission.Status = "queue_error"
+		submission.ErrorMessage = &message
+		_ = uc.submissionRepo.SaveSubmission(&submission)
 		return models.Submission{}, err
 	}
 
 	return submission, nil
 }
 
+func (uc *useCase) GetSubmission(_ context.Context, id string) (models.Submission, error) {
+	submission, err := uc.submissionRepo.GetSubmissionByIDWithPreloaded(id)
+	if err != nil {
+		return models.Submission{}, err
+	}
+
+	return *submission, nil
+}
+
 func (uc *useCase) GradeJob(ctx context.Context, job queue.Job) error {
 	results, err := uc.grader.Run(ctx, &job.Submission, &job.Problem, job.TestCases)
 	if err != nil {
 		message := err.Error()
-		_, updateErr := uc.updateSubmission.Execute(submissionUseCase.UpdateSubmissionInput{
-			ID:           job.Submission.ID,
-			Status:       "system_error",
-			ErrorMessage: &message,
-		})
+		job.Submission.Status = "system_error"
+		job.Submission.ErrorMessage = &message
+		updateErr := uc.submissionRepo.SaveSubmission(&job.Submission)
 		return errors.Join(err, updateErr)
 	}
 
@@ -129,9 +140,7 @@ func (uc *useCase) GradeJob(ctx context.Context, job queue.Job) error {
 		dbResults = append(dbResults, dbResult)
 	}
 
-	if err := uc.batchResults.Execute(resultUseCase.BatchCreateTestCaseResultInput{
-		TestCaseResults: dbResults,
-	}); err != nil {
+	if err := uc.resultRepo.BatchSaveTestCaseResults(dbResults); err != nil {
 		return err
 	}
 
@@ -139,11 +148,8 @@ func (uc *useCase) GradeJob(ctx context.Context, job queue.Job) error {
 	if len(results) > 0 {
 		score = passed * 100 / len(results)
 	}
-	_, err = uc.updateSubmission.Execute(submissionUseCase.UpdateSubmissionInput{
-		ID:      job.Submission.ID,
-		Status:  status,
-		Score:   score,
-		RunTime: int(totalRuntime.Milliseconds()),
-	})
-	return err
+	job.Submission.Status = status
+	job.Submission.Score = score
+	job.Submission.RunTime = int(totalRuntime.Milliseconds())
+	return uc.submissionRepo.SaveSubmission(&job.Submission)
 }
