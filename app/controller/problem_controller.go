@@ -17,6 +17,9 @@ type ProblemController struct {
 type problemRequest struct {
 	Title       string `json:"title"`
 	Description string `json:"description"`
+	Author      string `json:"created_by"`
+	Tag         string `json:"tag"`
+	Difficulty  string `json:"difficulty"`
 	TimeLimit   int    `json:"time_limit"`
 	MemoryLimit int    `json:"memory_limit"`
 }
@@ -98,7 +101,7 @@ func bindProblemRequest(c *gin.Context) (problemRequest, bool) {
 }
 
 func (request problemRequest) toInput() problem.CreateInput {
-	return problem.CreateInput{Title: request.Title, Description: request.Description, TimeLimit: request.TimeLimit, MemoryLimit: request.MemoryLimit}
+	return problem.CreateInput{Title: request.Title, Description: request.Description, Author: request.Author, Tag: request.Tag, Difficulty: request.Difficulty, TimeLimit: request.TimeLimit, MemoryLimit: request.MemoryLimit}
 }
 
 func writeProblemError(c *gin.Context, err error) {

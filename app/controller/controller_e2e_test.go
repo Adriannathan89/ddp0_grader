@@ -24,7 +24,7 @@ import (
 type problemFake struct{ item models.Problem }
 
 func (f *problemFake) Create(_ context.Context, input problemuc.CreateInput) (models.Problem, error) {
-	f.item = models.Problem{ID: "problem-1", Title: input.Title, Description: input.Description, TimeLimit: input.TimeLimit, MemoryLimit: input.MemoryLimit}
+	f.item = models.Problem{ID: "problem-1", Title: input.Title, Description: input.Description, Author: input.Author, Tag: input.Tag, Difficulty: input.Difficulty, TimeLimit: input.TimeLimit, MemoryLimit: input.MemoryLimit}
 	return f.item, nil
 }
 func (f *problemFake) GetAll(context.Context) ([]models.Problem, error) {
@@ -40,7 +40,8 @@ func (f *problemFake) Update(_ context.Context, id string, input problemuc.Updat
 	if id != f.item.ID {
 		return models.Problem{}, gorm.ErrRecordNotFound
 	}
-	f.item.Title, f.item.Description = input.Title, input.Description
+	f.item.Title, f.item.Description, f.item.Author = input.Title, input.Description, input.Author
+	f.item.Tag, f.item.Difficulty = input.Tag, input.Difficulty
 	f.item.TimeLimit, f.item.MemoryLimit = input.TimeLimit, input.MemoryLimit
 	return f.item, nil
 }
@@ -132,7 +133,7 @@ func TestRoutesE2E(t *testing.T) {
 		t.Fatalf("GET /health status = %d, want 200", response.Code)
 	}
 
-	problemBody := `{"title":"Sum","description":"Add two integers","time_limit":2,"memory_limit":256}`
+	problemBody := `{"title":"Sum","description":"Add two integers","created_by":"lecturer","tag":"math","difficulty":"easy","time_limit":2,"memory_limit":256}`
 	if response := request(router, http.MethodPost, "/problems", "application/json", bytes.NewBufferString(problemBody)); response.Code != http.StatusCreated {
 		t.Fatalf("POST /problems status = %d, body = %s", response.Code, response.Body.String())
 	}
@@ -142,7 +143,7 @@ func TestRoutesE2E(t *testing.T) {
 	if response := request(router, http.MethodGet, "/problems/problem-1", "", nil); response.Code != http.StatusOK {
 		t.Fatalf("GET /problems/:id status = %d", response.Code)
 	}
-	updatedProblem := `{"title":"Sum v2","description":"Add values","time_limit":3,"memory_limit":512}`
+	updatedProblem := `{"title":"Sum v2","description":"Add values","created_by":"lecturer","tag":"operational","difficulty":"medium","time_limit":3,"memory_limit":512}`
 	if response := request(router, http.MethodPatch, "/problems/problem-1", "application/json", bytes.NewBufferString(updatedProblem)); response.Code != http.StatusOK {
 		t.Fatalf("PATCH /problems/:id status = %d, body = %s", response.Code, response.Body.String())
 	}

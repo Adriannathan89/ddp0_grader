@@ -18,6 +18,9 @@ func main() {
 		ID:          helloWorldProblemID,
 		Title:       "Hello World",
 		Description: "Print exactly: Hello, World!",
+		Author:      "system",
+		Tag:         models.TagOperational,
+		Difficulty:  models.DifficultyEasy,
 		TimeLimit:   1000,
 		MemoryLimit: 128,
 	}

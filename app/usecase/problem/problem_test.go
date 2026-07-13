@@ -52,7 +52,7 @@ func TestUseCaseCRUD(t *testing.T) {
 	useCase := NewUseCase(repo)
 	ctx := context.Background()
 
-	created, err := useCase.Create(ctx, CreateInput{Title: "Sum", Description: "Add two values", TimeLimit: 2, MemoryLimit: 256})
+	created, err := useCase.Create(ctx, CreateInput{Title: "Sum", Description: "Add two values", Author: "lecturer", Tag: models.TagMath, Difficulty: models.DifficultyEasy, TimeLimit: 2, MemoryLimit: 256})
 	if err != nil || created.ID == "" {
 		t.Fatalf("Create() = (%+v, %v), want created problem", created, err)
 	}
@@ -62,7 +62,7 @@ func TestUseCaseCRUD(t *testing.T) {
 		t.Fatalf("GetByID() = (%+v, %v)", got, err)
 	}
 
-	updated, err := useCase.Update(ctx, created.ID, UpdateInput{Title: "Sum v2", Description: "Add", TimeLimit: 3, MemoryLimit: 512})
+	updated, err := useCase.Update(ctx, created.ID, UpdateInput{Title: "Sum v2", Description: "Add", Author: "lecturer", Tag: models.TagOperational, Difficulty: models.DifficultyMedium, TimeLimit: 3, MemoryLimit: 512})
 	if err != nil || updated.TimeLimit != 3 || updated.Title != "Sum v2" {
 		t.Fatalf("Update() = (%+v, %v)", updated, err)
 	}
@@ -82,7 +82,7 @@ func TestUseCaseCRUD(t *testing.T) {
 
 func TestUseCaseRejectsInvalidInput(t *testing.T) {
 	useCase := NewUseCase(newFakeRepository())
-	_, err := useCase.Create(context.Background(), CreateInput{Title: "", Description: "x", TimeLimit: 1, MemoryLimit: 1})
+	_, err := useCase.Create(context.Background(), CreateInput{Title: "", Description: "x", Author: "lecturer", Tag: models.TagMath, Difficulty: models.DifficultyEasy, TimeLimit: 1, MemoryLimit: 1})
 	if err != ErrInvalidInput {
 		t.Fatalf("Create() error = %v, want %v", err, ErrInvalidInput)
 	}

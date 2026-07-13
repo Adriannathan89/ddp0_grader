@@ -39,6 +39,9 @@ func main() {
 		ID:          problemID,
 		Title:       "Kita Balas di UAS",
 		Description: description,
+		Author:      "system",
+		Tag:         models.TagMath,
+		Difficulty:  models.DifficultyEasy,
 		TimeLimit:   1000,
 		MemoryLimit: 128,
 	}
