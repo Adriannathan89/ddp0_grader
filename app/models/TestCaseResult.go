@@ -1,0 +1,12 @@
+package models
+
+type TestCaseResult struct {
+	ID           string  `gorm:"primaryKey" json:"id"`
+	SubmissionID string  `gorm:"not null; foreignKey:SubmissionID" json:"submission_id"`
+	TestCaseID   string  `gorm:"not null; foreignKey:TestCaseID" json:"test_case_id"`
+	IsPassed     bool    `gorm:"not null" json:"is_passed"`
+	RunTime      int     `gorm:"not null" json:"run_time"`
+	ErrorMessage *string `gorm:"default:null" json:"error_message"`
+	CreatedAt    string  `gorm:"autoCreateTime" json:"created_at"`
+	UpdatedAt    string  `gorm:"autoUpdateTime" json:"updated_at"`
+}
