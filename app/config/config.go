@@ -4,13 +4,15 @@ import (
 	"context"
 	"log"
 
+	"ddp0_grader/app/models"
+
 	"github.com/redis/go-redis/v9"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 )
 
 var DB *gorm.DB
-var redisClient *redis.Client
+var RedisClient *redis.Client
 
 func connectDatabase() {
 	host := GetEnv("DB_HOST")
@@ -34,13 +36,13 @@ func connectRedis() {
 	redisPort := GetEnv("REDIS_PORT")
 	redisPassword := GetEnv("REDIS_PASSWORD")
 
-	redisClient = redis.NewClient(&redis.Options{
+	RedisClient = redis.NewClient(&redis.Options{
 		Addr:     redisHost + ":" + redisPort,
 		Password: redisPassword,
 		DB:       0,
 	})
 
-	_, err := redisClient.Ping(context.Background()).Result()
+	_, err := RedisClient.Ping(context.Background()).Result()
 	if err != nil {
 		log.Fatalf("Error connecting to Redis: %v", err)
 	}
@@ -48,7 +50,29 @@ func connectRedis() {
 	log.Println("Redis connection established")
 }
 
+func autoMigrate() {
+	err := DB.AutoMigrate(
+		&models.Problem{},
+		&models.TestCase{},
+		&models.Submission{},
+		&models.TestCaseResult{},
+	)
+	if err != nil {
+		log.Fatalf("Error during auto migration: %v", err)
+	}
+
+	log.Println("Database auto migration completed")
+}
+
 func InitConfig() {
 	connectDatabase()
+	autoMigrate()
 	connectRedis()
+}
+
+// InitDatabase initializes only the database connection. It is useful for
+// maintenance commands such as seeders that do not need Redis.
+func InitDatabase() {
+	connectDatabase()
+	autoMigrate()
 }
