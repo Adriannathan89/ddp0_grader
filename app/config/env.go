@@ -13,7 +13,7 @@ var loadEnvOnce sync.Once
 func LoadEnv() {
 	loadEnvOnce.Do(func() {
 		err := godotenv.Load(".env")
-		if err != nil {
+		if err != nil && !os.IsNotExist(err) {
 			log.Fatalf("Error loading .env file: %v", err)
 		}
 	})
