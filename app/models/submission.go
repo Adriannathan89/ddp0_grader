@@ -13,5 +13,5 @@ type Submission struct {
 	ErrorMessage    *string          `gorm:"default:null" json:"error_message"`
 	CreatedAt       time.Time        `json:"created_at"`
 	UpdatedAt       time.Time        `json:"updated_at"`
-	TestCaseResults []TestCaseResult `gorm:"foreignKey:SubmissionID" json:"test_case_results"`
+	TestCaseResults []TestCaseResult `gorm:"foreignKey:SubmissionID; constraint:OnUpdate:CASCADE,OnDelete:SET NULL" json:"test_case_results"`
 }
