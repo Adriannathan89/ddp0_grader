@@ -87,6 +87,11 @@ func removePrivateTestCase(testCases []models.TestCase) []models.TestCase {
 	for _, testCase := range testCases {
 		if !testCase.IsHidden {
 			publicTestCases = append(publicTestCases, testCase)
+		} else {
+			publicTestCase := testCase
+			publicTestCase.Input = ""
+			publicTestCase.Output = ""
+			publicTestCases = append(publicTestCases, publicTestCase)
 		}
 	}
 	return publicTestCases
