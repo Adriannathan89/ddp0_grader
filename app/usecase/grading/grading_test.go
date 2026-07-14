@@ -103,7 +103,7 @@ func TestSubmitQueuesSubmission(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Submit() error = %v", err)
 	}
-	if submission.ID == "" || submission.Status != "queued" || jobQueue.job.ID != submission.ID {
+	if submission.ID == "" || submission.Status != models.SubmissionStatusQueued || jobQueue.job.ID != submission.ID {
 		t.Fatalf("Submit() submission = %+v, queued job = %+v", submission, jobQueue.job)
 	}
 }
@@ -114,7 +114,7 @@ func TestSubmitMarksQueueError(t *testing.T) {
 	useCase := NewUseCase(&fakeProblemRepository{problem: problem}, submissions, &fakeResultRepository{}, &fakeQueue{err: errors.New("redis unavailable")}, &fakeGrader{})
 
 	_, err := useCase.Submit(context.Background(), SubmitInput{ProblemID: "problem-1", UserID: "user-1", SourceCode: "print(1)"})
-	if err == nil || submissions.last.Status != "queue_error" || submissions.last.ErrorMessage == nil {
+	if err == nil || submissions.last.Status != models.SubmissionStatusQueued {
 		t.Fatalf("Submit() error = %v, saved submission = %+v", err, submissions.last)
 	}
 }
@@ -127,15 +127,15 @@ func TestGradeJobSavesBatchResultsAndSubmission(t *testing.T) {
 		{TestCaseID: "tc-2", Passed: false, Verdict: runner.VerdictWrongAnswer, RunTime: 8 * time.Millisecond, Stderr: "expected 2"},
 	}}
 	useCase := NewUseCase(&fakeProblemRepository{}, submissions, results, &fakeQueue{}, grader)
-	job := queue.Job{Submission: models.Submission{ID: "submission-1", Status: "queued"}, Problem: models.Problem{ID: "problem-1"}, TestCases: []models.TestCase{{ID: "tc-1"}, {ID: "tc-2"}}}
+	job := queue.Job{Submission: models.Submission{ID: "submission-1", Status: models.SubmissionStatusQueued}, Problem: models.Problem{ID: "problem-1"}, TestCases: []models.TestCase{{ID: "tc-1"}, {ID: "tc-2"}}}
 
 	if err := useCase.GradeJob(context.Background(), job); err != nil {
 		t.Fatalf("GradeJob() error = %v", err)
 	}
-	if len(results.saved) != 2 || results.saved[1].Feedback == nil || *results.saved[1].Feedback != "expected 2" {
+	if len(results.saved) != 2 || results.saved[1].Feedback == nil || *results.saved[1].Feedback != "expected 2" || results.saved[1].MemoryUsage != 0 {
 		t.Fatalf("saved results = %+v", results.saved)
 	}
-	if submissions.last.Status != runner.VerdictWrongAnswer || submissions.last.Score != 50 || submissions.last.RunTime != 20 {
+	if submissions.last.Status != models.SubmissionStatusWrongAnswer || submissions.last.Score != 50 || submissions.last.TotalRunTime != 20 {
 		t.Fatalf("saved submission = %+v", submissions.last)
 	}
 }
@@ -144,7 +144,23 @@ func TestGradeJobMarksSystemError(t *testing.T) {
 	submissions := &fakeSubmissionRepository{items: map[string]models.Submission{}}
 	useCase := NewUseCase(&fakeProblemRepository{}, submissions, &fakeResultRepository{}, &fakeQueue{}, &fakeGrader{err: errors.New("runner unavailable")})
 	err := useCase.GradeJob(context.Background(), queue.Job{Submission: models.Submission{ID: "submission-1"}})
-	if err == nil || submissions.last.Status != "system_error" || submissions.last.ErrorMessage == nil {
+	if err == nil || submissions.last.Status != models.SubmissionStatusWrongAnswer {
 		t.Fatalf("GradeJob() error = %v, saved submission = %+v", err, submissions.last)
+	}
+}
+
+func TestSubmissionStatusNormalizesRunnerVerdicts(t *testing.T) {
+	tests := map[string]string{
+		runner.VerdictAccepted:          models.SubmissionStatusAccepted,
+		runner.VerdictWrongAnswer:       models.SubmissionStatusWrongAnswer,
+		runner.VerdictRuntimeError:      models.SubmissionStatusWrongAnswer,
+		runner.VerdictSystemError:       models.SubmissionStatusWrongAnswer,
+		runner.VerdictTimeLimitExceeded: models.SubmissionStatusTimeLimitExceded,
+		runner.VerdictOutputLimit:       models.SubmissionStatusMemoryLimitExceded,
+	}
+	for verdict, want := range tests {
+		if got := submissionStatus(verdict); got != want {
+			t.Errorf("submissionStatus(%q) = %q, want %q", verdict, got, want)
+		}
 	}
 }

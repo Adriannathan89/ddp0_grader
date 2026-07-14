@@ -62,10 +62,11 @@ func main() {
 		AllowCredentials: true,
 	}))
 
-	controller.NewHealthController().RegisterRoutes(router)
-	submissionController.RegisterRoutes(router)
-	problemController.RegisterRoutes(router)
-	testCaseController.RegisterRoutes(router)
+	api := router.Group("/api")
+	controller.NewHealthController().RegisterRoutes(api)
+	submissionController.RegisterRoutes(api)
+	problemController.RegisterRoutes(api)
+	testCaseController.RegisterRoutes(api)
 
 	if err := router.Run(":" + config.GetEnv("PORT")); err != nil {
 		log.Fatal(err)

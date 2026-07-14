@@ -2,15 +2,22 @@ package models
 
 import "time"
 
+const (
+	SubmissionStatusQueued             = "queued"
+	SubmissionStatusWrongAnswer        = "wrong_answer"
+	SubmissionStatusTimeLimitExceded   = "time_limit_exceded"
+	SubmissionStatusMemoryLimitExceded = "memory_limit_exceded"
+	SubmissionStatusAccepted           = "accepted"
+)
+
 type Submission struct {
 	ID              string           `gorm:"primaryKey" json:"id"`
 	ProblemID       string           `gorm:"not null" json:"problem_id"`
 	UserID          string           `gorm:"not null" json:"user_id"`
-	Status          string           `gorm:"default:'pending'" json:"status"`
+	Status          string           `gorm:"default:'queued'" json:"status"`
 	SourceCode      string           `gorm:"not null" json:"source_code"`
 	Score           int              `gorm:"not null" json:"score"`
-	RunTime         int              `gorm:"not null" json:"run_time"`
-	ErrorMessage    *string          `gorm:"default:null" json:"error_message"`
+	TotalRunTime    int              `gorm:"not null" json:"total_run_time"`
 	CreatedAt       time.Time        `json:"created_at"`
 	UpdatedAt       time.Time        `json:"updated_at"`
 	TestCaseResults []TestCaseResult `gorm:"foreignKey:SubmissionID; constraint:OnUpdate:CASCADE,OnDelete:CASCADE" json:"test_case_results"`

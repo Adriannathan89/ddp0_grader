@@ -12,7 +12,7 @@ func NewHealthController() *HealthController {
 	return &HealthController{}
 }
 
-func (controller *HealthController) RegisterRoutes(router *gin.Engine) {
+func (controller *HealthController) RegisterRoutes(router gin.IRouter) {
 	router.GET("/health", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"status": "ok"})
 	})

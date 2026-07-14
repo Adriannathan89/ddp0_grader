@@ -28,7 +28,7 @@ func NewProblemController(useCase problem.UseCase) *ProblemController {
 	return &ProblemController{useCase: useCase}
 }
 
-func (controller *ProblemController) RegisterRoutes(router *gin.Engine) {
+func (controller *ProblemController) RegisterRoutes(router gin.IRouter) {
 	problems := router.Group("/problems")
 	{
 		problems.POST("", controller.create)

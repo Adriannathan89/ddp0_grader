@@ -71,10 +71,25 @@ func (uc *useCase) GetByID(_ context.Context, id string) (models.TestCase, error
 }
 
 func (uc *useCase) GetByProblemID(_ context.Context, problemID string) ([]models.TestCase, error) {
-	if _, err := uc.problemRepo.GetProblemByID(strings.TrimSpace(problemID)); err != nil {
+	var testCases []models.TestCase
+	testCases, err := uc.testCaseRepo.GetTestCasesByProblemID(strings.TrimSpace(problemID))
+	if err != nil {
 		return nil, err
 	}
-	return uc.testCaseRepo.GetTestCasesByProblemID(strings.TrimSpace(problemID))
+
+	testCases = removePrivateTestCase(testCases)
+
+	return testCases, nil
+}
+
+func removePrivateTestCase(testCases []models.TestCase) []models.TestCase {
+	publicTestCases := make([]models.TestCase, 0, len(testCases))
+	for _, testCase := range testCases {
+		if !testCase.IsHidden {
+			publicTestCases = append(publicTestCases, testCase)
+		}
+	}
+	return publicTestCases
 }
 
 func (uc *useCase) Update(_ context.Context, id string, input UpdateInput) (models.TestCase, error) {

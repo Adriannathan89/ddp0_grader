@@ -68,7 +68,7 @@ func (uc *useCase) Submit(ctx context.Context, input SubmitInput) (models.Submis
 		ProblemID:  problem.ID,
 		UserID:     input.UserID,
 		SourceCode: input.SourceCode,
-		Status:     "queued",
+		Status:     models.SubmissionStatusQueued,
 	}
 	if err := uc.submissionRepo.SaveSubmission(&submission); err != nil {
 		return models.Submission{}, err
@@ -81,10 +81,6 @@ func (uc *useCase) Submit(ctx context.Context, input SubmitInput) (models.Submis
 		TestCases:  problem.TestCases,
 	})
 	if err != nil {
-		message := "cannot enqueue grading job"
-		submission.Status = "queue_error"
-		submission.ErrorMessage = &message
-		_ = uc.submissionRepo.SaveSubmission(&submission)
 		return models.Submission{}, err
 	}
 
@@ -103,9 +99,7 @@ func (uc *useCase) GetSubmission(_ context.Context, id string) (models.Submissio
 func (uc *useCase) GradeJob(ctx context.Context, job queue.Job) error {
 	results, err := uc.grader.Run(ctx, &job.Submission, &job.Problem, job.TestCases)
 	if err != nil {
-		message := err.Error()
-		job.Submission.Status = "system_error"
-		job.Submission.ErrorMessage = &message
+		job.Submission.Status = models.SubmissionStatusWrongAnswer
 		updateErr := uc.submissionRepo.SaveSubmission(&job.Submission)
 		return errors.Join(err, updateErr)
 	}
@@ -113,12 +107,12 @@ func (uc *useCase) GradeJob(ctx context.Context, job queue.Job) error {
 	passed := 0
 	totalRuntime := time.Duration(0)
 	dbResults := make([]models.TestCaseResult, 0, len(results))
-	status := runner.VerdictAccepted
+	status := models.SubmissionStatusAccepted
 	for _, result := range results {
 		if result.Passed {
 			passed++
-		} else if status == runner.VerdictAccepted {
-			status = result.Verdict
+		} else if status == models.SubmissionStatusAccepted {
+			status = submissionStatus(result.Verdict)
 		}
 		totalRuntime += result.RunTime
 
@@ -129,10 +123,12 @@ func (uc *useCase) GradeJob(ctx context.Context, job queue.Job) error {
 			IsPassed:     result.Passed,
 			Verdict:      result.Verdict,
 			RunTime:      int(result.RunTime.Milliseconds()),
+			MemoryUsage:  0,
 		}
 		if result.Error != nil {
-			feedback := result.Error.Error()
-			dbResult.Feedback = &feedback
+			message := result.Error.Error()
+			dbResult.ErrorMessage = &message
+			dbResult.Feedback = &message
 		} else if result.Stderr != "" {
 			feedback := result.Stderr
 			dbResult.Feedback = &feedback
@@ -150,6 +146,19 @@ func (uc *useCase) GradeJob(ctx context.Context, job queue.Job) error {
 	}
 	job.Submission.Status = status
 	job.Submission.Score = score
-	job.Submission.RunTime = int(totalRuntime.Milliseconds())
+	job.Submission.TotalRunTime = int(totalRuntime.Milliseconds())
 	return uc.submissionRepo.SaveSubmission(&job.Submission)
+}
+
+func submissionStatus(verdict string) string {
+	switch verdict {
+	case runner.VerdictAccepted:
+		return models.SubmissionStatusAccepted
+	case runner.VerdictTimeLimitExceeded:
+		return models.SubmissionStatusTimeLimitExceded
+	case runner.VerdictOutputLimit:
+		return models.SubmissionStatusMemoryLimitExceded
+	default:
+		return models.SubmissionStatusWrongAnswer
+	}
 }

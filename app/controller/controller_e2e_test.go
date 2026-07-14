@@ -109,10 +109,11 @@ func (f *gradingFake) GradeJob(context.Context, queue.Job) error { return nil }
 func newRouter() *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
-	controller.NewHealthController().RegisterRoutes(router)
-	controller.NewProblemController(&problemFake{}).RegisterRoutes(router)
-	controller.NewTestCaseController(&testCaseFake{}).RegisterRoutes(router)
-	controller.NewSubmissionController(&gradingFake{}).RegisterRoutes(router)
+	api := router.Group("/api")
+	controller.NewHealthController().RegisterRoutes(api)
+	controller.NewProblemController(&problemFake{}).RegisterRoutes(api)
+	controller.NewTestCaseController(&testCaseFake{}).RegisterRoutes(api)
+	controller.NewSubmissionController(&gradingFake{}).RegisterRoutes(api)
 	return router
 }
 
@@ -129,36 +130,36 @@ func request(router http.Handler, method, path, contentType string, body io.Read
 func TestRoutesE2E(t *testing.T) {
 	router := newRouter()
 
-	if response := request(router, http.MethodGet, "/health", "", nil); response.Code != http.StatusOK {
-		t.Fatalf("GET /health status = %d, want 200", response.Code)
+	if response := request(router, http.MethodGet, "/api/health", "", nil); response.Code != http.StatusOK {
+		t.Fatalf("GET /api/health status = %d, want 200", response.Code)
 	}
 
 	problemBody := `{"title":"Sum","description":"Add two integers","created_by":"lecturer","tag":"math","difficulty":"easy","time_limit":2,"memory_limit":256}`
-	if response := request(router, http.MethodPost, "/problems", "application/json", bytes.NewBufferString(problemBody)); response.Code != http.StatusCreated {
-		t.Fatalf("POST /problems status = %d, body = %s", response.Code, response.Body.String())
+	if response := request(router, http.MethodPost, "/api/problems", "application/json", bytes.NewBufferString(problemBody)); response.Code != http.StatusCreated {
+		t.Fatalf("POST /api/problems status = %d, body = %s", response.Code, response.Body.String())
 	}
-	if response := request(router, http.MethodGet, "/problems", "", nil); response.Code != http.StatusOK {
-		t.Fatalf("GET /problems status = %d", response.Code)
+	if response := request(router, http.MethodGet, "/api/problems", "", nil); response.Code != http.StatusOK {
+		t.Fatalf("GET /api/problems status = %d", response.Code)
 	}
-	if response := request(router, http.MethodGet, "/problems/problem-1", "", nil); response.Code != http.StatusOK {
-		t.Fatalf("GET /problems/:id status = %d", response.Code)
+	if response := request(router, http.MethodGet, "/api/problems/problem-1", "", nil); response.Code != http.StatusOK {
+		t.Fatalf("GET /api/problems/:id status = %d", response.Code)
 	}
 	updatedProblem := `{"title":"Sum v2","description":"Add values","created_by":"lecturer","tag":"operational","difficulty":"medium","time_limit":3,"memory_limit":512}`
-	if response := request(router, http.MethodPatch, "/problems/problem-1", "application/json", bytes.NewBufferString(updatedProblem)); response.Code != http.StatusOK {
-		t.Fatalf("PATCH /problems/:id status = %d, body = %s", response.Code, response.Body.String())
+	if response := request(router, http.MethodPatch, "/api/problems/problem-1", "application/json", bytes.NewBufferString(updatedProblem)); response.Code != http.StatusOK {
+		t.Fatalf("PATCH /api/problems/:id status = %d, body = %s", response.Code, response.Body.String())
 	}
 
 	testCaseBody := `{"input":"1 2","output":"3","is_hidden":true}`
-	if response := request(router, http.MethodPost, "/problems/problem-1/testcases", "application/json", bytes.NewBufferString(testCaseBody)); response.Code != http.StatusCreated {
+	if response := request(router, http.MethodPost, "/api/problems/problem-1/testcases", "application/json", bytes.NewBufferString(testCaseBody)); response.Code != http.StatusCreated {
 		t.Fatalf("POST testcase status = %d, body = %s", response.Code, response.Body.String())
 	}
-	if response := request(router, http.MethodGet, "/problems/problem-1/testcases", "", nil); response.Code != http.StatusOK {
+	if response := request(router, http.MethodGet, "/api/problems/problem-1/testcases", "", nil); response.Code != http.StatusOK {
 		t.Fatalf("GET testcases status = %d", response.Code)
 	}
-	if response := request(router, http.MethodGet, "/testcases/testcase-1", "", nil); response.Code != http.StatusOK {
+	if response := request(router, http.MethodGet, "/api/testcases/testcase-1", "", nil); response.Code != http.StatusOK {
 		t.Fatalf("GET testcase status = %d", response.Code)
 	}
-	if response := request(router, http.MethodPatch, "/testcases/testcase-1", "application/json", bytes.NewBufferString(`{"input":"2 3","output":"5","is_hidden":false}`)); response.Code != http.StatusOK {
+	if response := request(router, http.MethodPatch, "/api/testcases/testcase-1", "application/json", bytes.NewBufferString(`{"input":"2 3","output":"5","is_hidden":false}`)); response.Code != http.StatusOK {
 		t.Fatalf("PATCH testcase status = %d", response.Code)
 	}
 
@@ -172,22 +173,22 @@ func TestRoutesE2E(t *testing.T) {
 	}
 	_, _ = part.Write([]byte("print(3)"))
 	_ = writer.Close()
-	response := request(router, http.MethodPost, "/submissions/grade", writer.FormDataContentType(), multipartBody)
+	response := request(router, http.MethodPost, "/api/submissions/grade", writer.FormDataContentType(), multipartBody)
 	if response.Code != http.StatusAccepted {
-		t.Fatalf("POST /submissions/grade status = %d, body = %s", response.Code, response.Body.String())
+		t.Fatalf("POST /api/submissions/grade status = %d, body = %s", response.Code, response.Body.String())
 	}
 	var submitted map[string]string
 	if err := json.Unmarshal(response.Body.Bytes(), &submitted); err != nil || submitted["submission_id"] != "submission-1" {
 		t.Fatalf("submission response = %s, error = %v", response.Body.String(), err)
 	}
-	if response := request(router, http.MethodGet, "/submissions/submission-1", "", nil); response.Code != http.StatusOK {
+	if response := request(router, http.MethodGet, "/api/submissions/submission-1", "", nil); response.Code != http.StatusOK {
 		t.Fatalf("GET /submissions/:id status = %d", response.Code)
 	}
 
-	if response := request(router, http.MethodDelete, "/testcases/testcase-1", "", nil); response.Code != http.StatusNoContent {
+	if response := request(router, http.MethodDelete, "/api/testcases/testcase-1", "", nil); response.Code != http.StatusNoContent {
 		t.Fatalf("DELETE testcase status = %d", response.Code)
 	}
-	if response := request(router, http.MethodDelete, "/problems/problem-1", "", nil); response.Code != http.StatusNoContent {
+	if response := request(router, http.MethodDelete, "/api/problems/problem-1", "", nil); response.Code != http.StatusNoContent {
 		t.Fatalf("DELETE problem status = %d", response.Code)
 	}
 }
@@ -195,13 +196,13 @@ func TestRoutesE2E(t *testing.T) {
 func TestRoutesReturnExpectedClientErrors(t *testing.T) {
 	router := newRouter()
 
-	if response := request(router, http.MethodPost, "/problems", "application/json", bytes.NewBufferString(`{`)); response.Code != http.StatusBadRequest {
+	if response := request(router, http.MethodPost, "/api/problems", "application/json", bytes.NewBufferString(`{`)); response.Code != http.StatusBadRequest {
 		t.Fatalf("invalid problem JSON status = %d, want 400", response.Code)
 	}
-	if response := request(router, http.MethodGet, "/problems/missing", "", nil); response.Code != http.StatusNotFound {
+	if response := request(router, http.MethodGet, "/api/problems/missing", "", nil); response.Code != http.StatusNotFound {
 		t.Fatalf("missing problem status = %d, want 404", response.Code)
 	}
-	if response := request(router, http.MethodPost, "/submissions/grade", "", nil); response.Code != http.StatusBadRequest {
+	if response := request(router, http.MethodPost, "/api/submissions/grade", "", nil); response.Code != http.StatusBadRequest {
 		t.Fatalf("submission without form status = %d, want 400", response.Code)
 	}
 
@@ -215,7 +216,7 @@ func TestRoutesReturnExpectedClientErrors(t *testing.T) {
 	}
 	_, _ = part.Write([]byte("print(3)"))
 	_ = writer.Close()
-	if response := request(router, http.MethodPost, "/submissions/grade", writer.FormDataContentType(), body); response.Code != http.StatusBadRequest {
+	if response := request(router, http.MethodPost, "/api/submissions/grade", writer.FormDataContentType(), body); response.Code != http.StatusBadRequest {
 		t.Fatalf("submission with non-python file status = %d, want 400", response.Code)
 	}
 }

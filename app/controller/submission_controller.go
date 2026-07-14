@@ -23,7 +23,7 @@ func NewSubmissionController(grading grading.UseCase) *SubmissionController {
 	return &SubmissionController{grading: grading}
 }
 
-func (controller *SubmissionController) RegisterRoutes(router *gin.Engine) {
+func (controller *SubmissionController) RegisterRoutes(router gin.IRouter) {
 	submission := router.Group("/submissions")
 	{
 		submission.POST("/grade", controller.grade)
