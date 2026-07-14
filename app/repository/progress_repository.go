@@ -45,7 +45,7 @@ func (r *progressRepository) GetProgressByProblemAndUser(problemID string, userI
 
 func (r *progressRepository) GetProgressWithSubmissionsByProblemAndUser(problemID string, userID string) (*models.Progress, error) {
 	var progress models.Progress
-	if err := r.db.Preload("Submissions").Where("problem_id = ? AND user_id = ?", problemID, userID).First(&progress).Error; err != nil {
+	if err := r.db.Preload("Submissions").Preload("Submissions.TestCaseResults").Where("problem_id = ? AND user_id = ?", problemID, userID).First(&progress).Error; err != nil {
 		log.Printf("Error retrieving progress with submissions by problem ID and user ID: %v", err)
 		return nil, err
 	}
