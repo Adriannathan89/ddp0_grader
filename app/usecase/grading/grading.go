@@ -11,6 +11,7 @@ import (
 	"ddp0_grader/pkg/runner"
 
 	"github.com/google/uuid"
+	"gorm.io/gorm"
 )
 
 type SubmitInput struct {
@@ -37,6 +38,8 @@ type useCase struct {
 	problemRepo    repository.ProblemRepository
 	submissionRepo repository.SubmissionRepository
 	resultRepo     repository.TestCaseResultRepository
+	progressRepo   repository.ProgressRepository
+	userRepo       repository.UserRepository
 	jobQueue       JobQueue
 	grader         Grader
 }
@@ -45,6 +48,8 @@ func NewUseCase(
 	problemRepo repository.ProblemRepository,
 	submissionRepo repository.SubmissionRepository,
 	resultRepo repository.TestCaseResultRepository,
+	progressRepo repository.ProgressRepository,
+	userRepo repository.UserRepository,
 	jobQueue JobQueue,
 	grader Grader,
 ) UseCase {
@@ -52,6 +57,8 @@ func NewUseCase(
 		problemRepo:    problemRepo,
 		submissionRepo: submissionRepo,
 		resultRepo:     resultRepo,
+		progressRepo:   progressRepo,
+		userRepo:       userRepo,
 		jobQueue:       jobQueue,
 		grader:         grader,
 	}
@@ -62,11 +69,29 @@ func (uc *useCase) Submit(ctx context.Context, input SubmitInput) (models.Submis
 	if err != nil {
 		return models.Submission{}, err
 	}
+	if _, err := uc.userRepo.GetUserByID(input.UserID); err != nil {
+		return models.Submission{}, err
+	}
+	existingProgress, err := uc.progressRepo.GetProgressByProblemAndUser(input.ProblemID, input.UserID)
+
+	if err != nil {
+		if !errors.Is(err, gorm.ErrRecordNotFound) {
+			return models.Submission{}, err
+		}
+		existingProgress = &models.Progress{
+			ID:        uuid.New().String(),
+			ProblemID: input.ProblemID,
+			UserID:    input.UserID,
+			BestScore: 0,
+		}
+		if err := uc.progressRepo.SaveProgress(existingProgress); err != nil {
+			return models.Submission{}, err
+		}
+	}
 
 	submission := models.Submission{
 		ID:         uuid.New().String(),
-		ProblemID:  problem.ID,
-		UserID:     input.UserID,
+		ProgressID: existingProgress.ID,
 		SourceCode: input.SourceCode,
 		Status:     models.SubmissionStatusQueued,
 	}
@@ -147,6 +172,10 @@ func (uc *useCase) GradeJob(ctx context.Context, job queue.Job) error {
 	job.Submission.Status = status
 	job.Submission.Score = score
 	job.Submission.TotalRunTime = int(totalRuntime.Milliseconds())
+	if err := uc.progressRepo.UpdateBestScore(job.Submission.ProgressID, score); err != nil {
+		return err
+	}
+
 	return uc.submissionRepo.SaveSubmission(&job.Submission)
 }
 

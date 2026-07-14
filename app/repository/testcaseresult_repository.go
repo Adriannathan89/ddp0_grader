@@ -59,7 +59,7 @@ func (r *testCaseResultRepository) DeleteTestCaseResult(testCaseResult *models.T
 
 func (r *testCaseResultRepository) GetTestCasesByUserIDAndSubmissionID(userID string, submissionID string) ([]models.TestCaseResult, error) {
 	var testCaseResults []models.TestCaseResult
-	if err := r.db.Joins("JOIN submissions ON submissions.id = test_case_results.submission_id").Where("submissions.user_id = ? AND test_case_results.submission_id = ?", userID, submissionID).Find(&testCaseResults).Error; err != nil {
+	if err := r.db.Joins("JOIN submissions ON submissions.id = test_case_results.submission_id").Joins("JOIN progresses ON progresses.id = submissions.progress_id").Where("progresses.user_id = ? AND test_case_results.submission_id = ?", userID, submissionID).Find(&testCaseResults).Error; err != nil {
 		log.Printf("Error retrieving test case results by user ID and submission ID: %v", err)
 		return nil, err
 	}

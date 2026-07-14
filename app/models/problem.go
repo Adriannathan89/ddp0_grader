@@ -29,4 +29,5 @@ type Problem struct {
 	CreatedAt   time.Time  `json:"created_at"`
 	UpdatedAt   time.Time  `json:"updated_at"`
 	TestCases   []TestCase `gorm:"foreignKey:ProblemID; constraint:OnUpdate:CASCADE,OnDelete:CASCADE" json:"test_cases"`
+	Progresses  []Progress `gorm:"foreignKey:ProblemID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE" json:"-"`
 }

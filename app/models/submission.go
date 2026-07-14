@@ -12,13 +12,13 @@ const (
 
 type Submission struct {
 	ID              string           `gorm:"primaryKey" json:"id"`
-	ProblemID       string           `gorm:"not null" json:"problem_id"`
-	UserID          string           `gorm:"not null" json:"user_id"`
+	ProgressID      string           `gorm:"not null; foreignKey:ProgressID" json:"progress_id"`
 	Status          string           `gorm:"default:'queued'" json:"status"`
 	SourceCode      string           `gorm:"not null" json:"source_code"`
 	Score           int              `gorm:"not null" json:"score"`
 	TotalRunTime    int              `gorm:"not null" json:"total_run_time"`
 	CreatedAt       time.Time        `json:"created_at"`
 	UpdatedAt       time.Time        `json:"updated_at"`
+	Progress        Progress         `gorm:"foreignKey:ProgressID;references:ID" json:"-"`
 	TestCaseResults []TestCaseResult `gorm:"foreignKey:SubmissionID; constraint:OnUpdate:CASCADE,OnDelete:CASCADE" json:"test_case_results"`
 }

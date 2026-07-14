@@ -52,8 +52,10 @@ func connectRedis() {
 
 func autoMigrate() {
 	err := DB.AutoMigrate(
+		&models.User{},
 		&models.Problem{},
 		&models.TestCase{},
+		&models.Progress{},
 		&models.Submission{},
 		&models.TestCaseResult{},
 	)

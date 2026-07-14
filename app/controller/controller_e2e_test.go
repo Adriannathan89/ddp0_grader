@@ -95,7 +95,7 @@ func (f *gradingFake) Submit(_ context.Context, input grading.SubmitInput) (mode
 	if input.ProblemID == "missing" {
 		return models.Submission{}, gorm.ErrRecordNotFound
 	}
-	f.submission = models.Submission{ID: "submission-1", ProblemID: input.ProblemID, UserID: input.UserID, SourceCode: input.SourceCode, Status: "queued"}
+	f.submission = models.Submission{ID: "submission-1", ProgressID: "progress-1", SourceCode: input.SourceCode, Status: models.SubmissionStatusQueued}
 	return f.submission, nil
 }
 func (f *gradingFake) GetSubmission(_ context.Context, id string) (models.Submission, error) {
@@ -106,6 +106,23 @@ func (f *gradingFake) GetSubmission(_ context.Context, id string) (models.Submis
 }
 func (f *gradingFake) GradeJob(context.Context, queue.Job) error { return nil }
 
+type progressFake struct {
+	progress models.Progress
+}
+
+func (f *progressFake) GetByUserID(_ context.Context, userID string) ([]models.Progress, error) {
+	if userID != "user-1" {
+		return []models.Progress{}, nil
+	}
+	return []models.Progress{f.progress}, nil
+}
+func (f *progressFake) GetByUserAndProblemID(_ context.Context, userID, problemID string) (models.Progress, error) {
+	if userID != "user-1" || problemID != "problem-1" {
+		return models.Progress{}, gorm.ErrRecordNotFound
+	}
+	return f.progress, nil
+}
+
 func newRouter() *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
@@ -114,6 +131,7 @@ func newRouter() *gin.Engine {
 	controller.NewProblemController(&problemFake{}).RegisterRoutes(api)
 	controller.NewTestCaseController(&testCaseFake{}).RegisterRoutes(api)
 	controller.NewSubmissionController(&gradingFake{}).RegisterRoutes(api)
+	controller.NewProgressController(&progressFake{progress: models.Progress{ID: "progress-1", UserID: "user-1", ProblemID: "problem-1", Submissions: []models.Submission{{ID: "submission-1"}}}}).RegisterRoutes(api)
 	return router
 }
 
@@ -184,6 +202,12 @@ func TestRoutesE2E(t *testing.T) {
 	if response := request(router, http.MethodGet, "/api/submissions/submission-1", "", nil); response.Code != http.StatusOK {
 		t.Fatalf("GET /submissions/:id status = %d", response.Code)
 	}
+	if response := request(router, http.MethodGet, "/api/users/user-1/progresses", "", nil); response.Code != http.StatusOK {
+		t.Fatalf("GET /api/users/:userID/progresses status = %d", response.Code)
+	}
+	if response := request(router, http.MethodGet, "/api/users/user-1/progresses/problems/problem-1", "", nil); response.Code != http.StatusOK {
+		t.Fatalf("GET /api/users/:userID/progresses/problems/:problemID status = %d", response.Code)
+	}
 
 	if response := request(router, http.MethodDelete, "/api/testcases/testcase-1", "", nil); response.Code != http.StatusNoContent {
 		t.Fatalf("DELETE testcase status = %d", response.Code)
@@ -201,6 +225,9 @@ func TestRoutesReturnExpectedClientErrors(t *testing.T) {
 	}
 	if response := request(router, http.MethodGet, "/api/problems/missing", "", nil); response.Code != http.StatusNotFound {
 		t.Fatalf("missing problem status = %d, want 404", response.Code)
+	}
+	if response := request(router, http.MethodGet, "/api/users/missing/progresses", "", nil); response.Code != http.StatusOK {
+		t.Fatalf("user without progress status = %d, want 200", response.Code)
 	}
 	if response := request(router, http.MethodPost, "/api/submissions/grade", "", nil); response.Code != http.StatusBadRequest {
 		t.Fatalf("submission without form status = %d, want 400", response.Code)

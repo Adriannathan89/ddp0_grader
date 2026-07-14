@@ -71,6 +71,76 @@ func (r *fakeResultRepository) BatchSaveTestCaseResults(results []models.TestCas
 }
 func (r *fakeResultRepository) DeleteTestCaseResult(*models.TestCaseResult) error { return nil }
 
+type fakeProgressRepository struct{ progress *models.Progress }
+
+func (r *fakeProgressRepository) GetProgressByID(id string) (*models.Progress, error) {
+	if r.progress == nil || r.progress.ID != id {
+		return nil, gorm.ErrRecordNotFound
+	}
+	return r.progress, nil
+}
+func (r *fakeProgressRepository) GetProgressByProblemAndUser(problemID, userID string) (*models.Progress, error) {
+	if r.progress == nil || r.progress.ProblemID != problemID || r.progress.UserID != userID {
+		return nil, gorm.ErrRecordNotFound
+	}
+	return r.progress, nil
+}
+func (r *fakeProgressRepository) GetProgressWithSubmissionsByProblemAndUser(problemID, userID string) (*models.Progress, error) {
+	return r.GetProgressByProblemAndUser(problemID, userID)
+}
+func (r *fakeProgressRepository) GetProgressesWithSubmissionsByUserID(userID string) ([]models.Progress, error) {
+	if r.progress == nil || r.progress.UserID != userID {
+		return []models.Progress{}, nil
+	}
+	return []models.Progress{*r.progress}, nil
+}
+func (r *fakeProgressRepository) UpdateBestScore(id string, score int) error {
+	if r.progress == nil || r.progress.ID != id {
+		return gorm.ErrRecordNotFound
+	}
+	if score > r.progress.BestScore {
+		r.progress.BestScore = score
+	}
+	return nil
+}
+func (r *fakeProgressRepository) SaveProgress(progress *models.Progress) error {
+	copy := *progress
+	r.progress = &copy
+	return nil
+}
+func (r *fakeProgressRepository) DeleteProgress(progress *models.Progress) error {
+	if r.progress != nil && r.progress.ID == progress.ID {
+		r.progress = nil
+	}
+	return nil
+}
+
+type fakeUserRepository struct{ users map[string]models.User }
+
+func (r *fakeUserRepository) GetUserByID(id string) (*models.User, error) {
+	user, ok := r.users[id]
+	if !ok {
+		return nil, gorm.ErrRecordNotFound
+	}
+	return &user, nil
+}
+func (r *fakeUserRepository) GetUserByEmail(email string) (*models.User, error) {
+	for _, user := range r.users {
+		if user.Email == email {
+			return &user, nil
+		}
+	}
+	return nil, gorm.ErrRecordNotFound
+}
+func (r *fakeUserRepository) SaveUser(user *models.User) error {
+	r.users[user.ID] = *user
+	return nil
+}
+func (r *fakeUserRepository) DeleteUser(user *models.User) error {
+	delete(r.users, user.ID)
+	return nil
+}
+
 type fakeQueue struct {
 	job queue.Job
 	err error
@@ -97,13 +167,15 @@ func TestSubmitQueuesSubmission(t *testing.T) {
 	problem := models.Problem{ID: "problem-1", TestCases: []models.TestCase{{ID: "tc-1", ProblemID: "problem-1"}}}
 	submissions := &fakeSubmissionRepository{items: map[string]models.Submission{}}
 	jobQueue := &fakeQueue{}
-	useCase := NewUseCase(&fakeProblemRepository{problem: problem}, submissions, &fakeResultRepository{}, jobQueue, &fakeGrader{})
+	progresses := &fakeProgressRepository{}
+	users := &fakeUserRepository{users: map[string]models.User{"user-1": {ID: "user-1", Email: "user@example.com"}}}
+	useCase := NewUseCase(&fakeProblemRepository{problem: problem}, submissions, &fakeResultRepository{}, progresses, users, jobQueue, &fakeGrader{})
 
 	submission, err := useCase.Submit(context.Background(), SubmitInput{ProblemID: "problem-1", UserID: "user-1", SourceCode: "print(1)"})
 	if err != nil {
 		t.Fatalf("Submit() error = %v", err)
 	}
-	if submission.ID == "" || submission.Status != models.SubmissionStatusQueued || jobQueue.job.ID != submission.ID {
+	if submission.ID == "" || submission.ProgressID == "" || submission.Status != models.SubmissionStatusQueued || jobQueue.job.ID != submission.ID || progresses.progress == nil {
 		t.Fatalf("Submit() submission = %+v, queued job = %+v", submission, jobQueue.job)
 	}
 }
@@ -111,7 +183,9 @@ func TestSubmitQueuesSubmission(t *testing.T) {
 func TestSubmitMarksQueueError(t *testing.T) {
 	problem := models.Problem{ID: "problem-1"}
 	submissions := &fakeSubmissionRepository{items: map[string]models.Submission{}}
-	useCase := NewUseCase(&fakeProblemRepository{problem: problem}, submissions, &fakeResultRepository{}, &fakeQueue{err: errors.New("redis unavailable")}, &fakeGrader{})
+	progresses := &fakeProgressRepository{}
+	users := &fakeUserRepository{users: map[string]models.User{"user-1": {ID: "user-1"}}}
+	useCase := NewUseCase(&fakeProblemRepository{problem: problem}, submissions, &fakeResultRepository{}, progresses, users, &fakeQueue{err: errors.New("redis unavailable")}, &fakeGrader{})
 
 	_, err := useCase.Submit(context.Background(), SubmitInput{ProblemID: "problem-1", UserID: "user-1", SourceCode: "print(1)"})
 	if err == nil || submissions.last.Status != models.SubmissionStatusQueued {
@@ -122,12 +196,13 @@ func TestSubmitMarksQueueError(t *testing.T) {
 func TestGradeJobSavesBatchResultsAndSubmission(t *testing.T) {
 	submissions := &fakeSubmissionRepository{items: map[string]models.Submission{}}
 	results := &fakeResultRepository{}
+	progresses := &fakeProgressRepository{progress: &models.Progress{ID: "progress-1"}}
 	grader := &fakeGrader{results: []runner.TestResult{
 		{TestCaseID: "tc-1", Passed: true, Verdict: runner.VerdictAccepted, RunTime: 12 * time.Millisecond},
 		{TestCaseID: "tc-2", Passed: false, Verdict: runner.VerdictWrongAnswer, RunTime: 8 * time.Millisecond, Stderr: "expected 2"},
 	}}
-	useCase := NewUseCase(&fakeProblemRepository{}, submissions, results, &fakeQueue{}, grader)
-	job := queue.Job{Submission: models.Submission{ID: "submission-1", Status: models.SubmissionStatusQueued}, Problem: models.Problem{ID: "problem-1"}, TestCases: []models.TestCase{{ID: "tc-1"}, {ID: "tc-2"}}}
+	useCase := NewUseCase(&fakeProblemRepository{}, submissions, results, progresses, &fakeUserRepository{users: map[string]models.User{}}, &fakeQueue{}, grader)
+	job := queue.Job{Submission: models.Submission{ID: "submission-1", ProgressID: "progress-1", Status: models.SubmissionStatusQueued}, Problem: models.Problem{ID: "problem-1"}, TestCases: []models.TestCase{{ID: "tc-1"}, {ID: "tc-2"}}}
 
 	if err := useCase.GradeJob(context.Background(), job); err != nil {
 		t.Fatalf("GradeJob() error = %v", err)
@@ -142,7 +217,7 @@ func TestGradeJobSavesBatchResultsAndSubmission(t *testing.T) {
 
 func TestGradeJobMarksSystemError(t *testing.T) {
 	submissions := &fakeSubmissionRepository{items: map[string]models.Submission{}}
-	useCase := NewUseCase(&fakeProblemRepository{}, submissions, &fakeResultRepository{}, &fakeQueue{}, &fakeGrader{err: errors.New("runner unavailable")})
+	useCase := NewUseCase(&fakeProblemRepository{}, submissions, &fakeResultRepository{}, &fakeProgressRepository{}, &fakeUserRepository{users: map[string]models.User{}}, &fakeQueue{}, &fakeGrader{err: errors.New("runner unavailable")})
 	err := useCase.GradeJob(context.Background(), queue.Job{Submission: models.Submission{ID: "submission-1"}})
 	if err == nil || submissions.last.Status != models.SubmissionStatusWrongAnswer {
 		t.Fatalf("GradeJob() error = %v, saved submission = %+v", err, submissions.last)

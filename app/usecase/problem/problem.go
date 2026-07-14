@@ -57,7 +57,7 @@ func (uc *useCase) GetAll(_ context.Context) ([]models.Problem, error) {
 }
 
 func (uc *useCase) GetByID(_ context.Context, id string) (models.Problem, error) {
-	problem, err := uc.repo.GetProblemByIDWithPreloaded(strings.TrimSpace(id))
+	problem, err := uc.repo.GetProblemByID(strings.TrimSpace(id))
 	if err != nil {
 		return models.Problem{}, err
 	}

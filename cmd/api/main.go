@@ -11,6 +11,7 @@ import (
 	"ddp0_grader/app/repository"
 	"ddp0_grader/app/usecase/grading"
 	"ddp0_grader/app/usecase/problem"
+	progressuc "ddp0_grader/app/usecase/progress"
 	"ddp0_grader/app/usecase/testcase"
 	"ddp0_grader/pkg/queue"
 	"ddp0_grader/pkg/runner"
@@ -26,6 +27,8 @@ func main() {
 	submissionRepo := repository.NewSubmissionRepository(config.DB)
 	resultRepo := repository.NewTestCaseResultRepository(config.DB)
 	testCaseRepo := repository.NewTestCaseRepository(config.DB)
+	progressRepo := repository.NewProgressRepository(config.DB)
+	userRepo := repository.NewUserRepository(config.DB)
 	jobQueue, err := queue.NewWithClient(config.RedisClient, queue.Config{
 		Stream:   "grader:jobs",
 		Group:    "grader-workers",
@@ -40,12 +43,14 @@ func main() {
 		DefaultTime:     2 * time.Second,
 		DefaultMemoryMB: 256,
 	})
-	gradingUseCase := grading.NewUseCase(problemRepo, submissionRepo, resultRepo, jobQueue, grader)
+	gradingUseCase := grading.NewUseCase(problemRepo, submissionRepo, resultRepo, progressRepo, userRepo, jobQueue, grader)
 	problemUseCase := problem.NewUseCase(problemRepo)
 	testCaseUseCase := testcase.NewUseCase(problemRepo, testCaseRepo)
+	progressUseCase := progressuc.NewUseCase(progressRepo)
 	submissionController := controller.NewSubmissionController(gradingUseCase)
 	problemController := controller.NewProblemController(problemUseCase)
 	testCaseController := controller.NewTestCaseController(testCaseUseCase)
+	progressController := controller.NewProgressController(progressUseCase)
 	go func() {
 		if err := jobQueue.WorkN(context.Background(), 10, gradingUseCase.GradeJob); err != nil && !errors.Is(err, context.Canceled) {
 			log.Printf("grader workers stopped: %v", err)
@@ -67,6 +72,7 @@ func main() {
 	submissionController.RegisterRoutes(api)
 	problemController.RegisterRoutes(api)
 	testCaseController.RegisterRoutes(api)
+	progressController.RegisterRoutes(api)
 
 	if err := router.Run(":" + config.GetEnv("PORT")); err != nil {
 		log.Fatal(err)
