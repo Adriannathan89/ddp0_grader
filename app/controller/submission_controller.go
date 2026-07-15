@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"ddp0_grader/app/config"
 	"ddp0_grader/app/usecase/grading"
 
 	"github.com/gin-gonic/gin"
@@ -32,12 +33,16 @@ func (controller *SubmissionController) RegisterRoutes(router gin.IRouter) {
 }
 
 func (controller *SubmissionController) getByID(c *gin.Context) {
+	userID, ok := config.AuthenticatedUserID(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "missing authenticated user"})
+		return
+	}
 	id := strings.TrimSpace(c.Param("id"))
 	if id == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "submission id is required"})
 		return
 	}
-
 	submission, err := controller.grading.GetSubmission(c.Request.Context(), id)
 	if err != nil {
 		status := http.StatusInternalServerError
@@ -47,15 +52,23 @@ func (controller *SubmissionController) getByID(c *gin.Context) {
 		c.JSON(status, gin.H{"error": "submission not found"})
 		return
 	}
+	if submission.Progress.UserID != userID {
+		c.JSON(http.StatusForbidden, gin.H{"error": "submission does not belong to the authenticated user"})
+		return
+	}
 
 	c.JSON(http.StatusOK, submission)
 }
 
 func (controller *SubmissionController) grade(c *gin.Context) {
 	problemID := strings.TrimSpace(c.PostForm("problem_id"))
-	userID := strings.TrimSpace(c.PostForm("user_id"))
-	if problemID == "" || userID == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "problem_id and user_id are required"})
+	userID, ok := config.AuthenticatedUserID(c)
+	if problemID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "problem_id is required"})
+		return
+	}
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "missing authenticated user"})
 		return
 	}
 

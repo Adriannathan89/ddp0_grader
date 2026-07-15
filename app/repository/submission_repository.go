@@ -33,7 +33,7 @@ func (r *submissionRepository) GetSubmissionByID(id string) (*models.Submission,
 
 func (r *submissionRepository) GetSubmissionByIDWithPreloaded(id string) (*models.Submission, error) {
 	var submission models.Submission
-	if err := r.db.Preload("TestCaseResults").First(&submission, "id = ?", id).Error; err != nil {
+	if err := r.db.Preload("Progress").Preload("TestCaseResults").First(&submission, "id = ?", id).Error; err != nil {
 		log.Printf("Error retrieving submission by ID with preloaded test case results: %v", err)
 		return nil, err
 	}

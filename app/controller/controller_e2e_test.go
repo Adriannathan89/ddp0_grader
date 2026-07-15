@@ -10,6 +10,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"ddp0_grader/app/config"
 	"ddp0_grader/app/controller"
 	"ddp0_grader/app/models"
 	"ddp0_grader/app/usecase/grading"
@@ -95,7 +96,7 @@ func (f *gradingFake) Submit(_ context.Context, input grading.SubmitInput) (mode
 	if input.ProblemID == "missing" {
 		return models.Submission{}, gorm.ErrRecordNotFound
 	}
-	f.submission = models.Submission{ID: "submission-1", ProgressID: "progress-1", SourceCode: input.SourceCode, Status: models.SubmissionStatusQueued}
+	f.submission = models.Submission{ID: "submission-1", ProgressID: "progress-1", Progress: models.Progress{ID: "progress-1", UserID: input.UserID}, SourceCode: input.SourceCode, Status: models.SubmissionStatusQueued}
 	return f.submission, nil
 }
 func (f *gradingFake) GetSubmission(_ context.Context, id string) (models.Submission, error) {
@@ -127,6 +128,10 @@ func newRouter() *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
 	api := router.Group("/api")
+	api.Use(func(c *gin.Context) {
+		c.Set(config.AuthUserIDContextKey, "user-1")
+		c.Next()
+	})
 	controller.NewHealthController().RegisterRoutes(api)
 	controller.NewProblemController(&problemFake{}).RegisterRoutes(api)
 	controller.NewTestCaseController(&testCaseFake{}).RegisterRoutes(api)
@@ -184,7 +189,6 @@ func TestRoutesE2E(t *testing.T) {
 	multipartBody := &bytes.Buffer{}
 	writer := multipart.NewWriter(multipartBody)
 	_ = writer.WriteField("problem_id", "problem-1")
-	_ = writer.WriteField("user_id", "user-1")
 	part, err := writer.CreateFormFile("file", "solution.py")
 	if err != nil {
 		t.Fatal(err)
@@ -202,11 +206,11 @@ func TestRoutesE2E(t *testing.T) {
 	if response := request(router, http.MethodGet, "/api/submissions/submission-1", "", nil); response.Code != http.StatusOK {
 		t.Fatalf("GET /submissions/:id status = %d", response.Code)
 	}
-	if response := request(router, http.MethodGet, "/api/users/user-1/progresses", "", nil); response.Code != http.StatusOK {
-		t.Fatalf("GET /api/users/:userID/progresses status = %d", response.Code)
+	if response := request(router, http.MethodGet, "/api/progresses", "", nil); response.Code != http.StatusOK {
+		t.Fatalf("GET /api/progresses status = %d", response.Code)
 	}
-	if response := request(router, http.MethodGet, "/api/users/user-1/progresses/problems/problem-1", "", nil); response.Code != http.StatusOK {
-		t.Fatalf("GET /api/users/:userID/progresses/problems/:problemID status = %d", response.Code)
+	if response := request(router, http.MethodGet, "/api/progresses/problem-1", "", nil); response.Code != http.StatusOK {
+		t.Fatalf("GET /api/progresses/:problemID status = %d", response.Code)
 	}
 
 	if response := request(router, http.MethodDelete, "/api/testcases/testcase-1", "", nil); response.Code != http.StatusNoContent {
@@ -226,9 +230,6 @@ func TestRoutesReturnExpectedClientErrors(t *testing.T) {
 	if response := request(router, http.MethodGet, "/api/problems/missing", "", nil); response.Code != http.StatusNotFound {
 		t.Fatalf("missing problem status = %d, want 404", response.Code)
 	}
-	if response := request(router, http.MethodGet, "/api/users/missing/progresses", "", nil); response.Code != http.StatusOK {
-		t.Fatalf("user without progress status = %d, want 200", response.Code)
-	}
 	if response := request(router, http.MethodPost, "/api/submissions/grade", "", nil); response.Code != http.StatusBadRequest {
 		t.Fatalf("submission without form status = %d, want 400", response.Code)
 	}
@@ -236,7 +237,6 @@ func TestRoutesReturnExpectedClientErrors(t *testing.T) {
 	body := &bytes.Buffer{}
 	writer := multipart.NewWriter(body)
 	_ = writer.WriteField("problem_id", "problem-1")
-	_ = writer.WriteField("user_id", "user-1")
 	part, err := writer.CreateFormFile("file", "solution.txt")
 	if err != nil {
 		t.Fatal(err)

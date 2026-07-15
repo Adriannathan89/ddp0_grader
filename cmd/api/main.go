@@ -37,6 +37,10 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	authMiddleware, err := config.NewJWTAuthMiddlewareFromEnv()
+	if err != nil {
+		log.Fatal(err)
+	}
 	grader := runner.New(runner.Config{
 		Image:           "python:3.12-slim",
 		OutputLimit:     1 << 20,
@@ -69,10 +73,12 @@ func main() {
 
 	api := router.Group("/api")
 	controller.NewHealthController().RegisterRoutes(api)
-	submissionController.RegisterRoutes(api)
 	problemController.RegisterRoutes(api)
 	testCaseController.RegisterRoutes(api)
-	progressController.RegisterRoutes(api)
+	protectedAPI := api.Group("")
+	protectedAPI.Use(authMiddleware)
+	submissionController.RegisterRoutes(protectedAPI)
+	progressController.RegisterRoutes(protectedAPI)
 
 	if err := router.Run(":" + config.GetEnv("PORT")); err != nil {
 		log.Fatal(err)

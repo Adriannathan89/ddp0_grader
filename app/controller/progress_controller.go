@@ -4,6 +4,7 @@ import (
 	"errors"
 	"net/http"
 
+	"ddp0_grader/app/config"
 	"ddp0_grader/app/usecase/progress"
 
 	"github.com/gin-gonic/gin"
@@ -19,15 +20,20 @@ func NewProgressController(useCase progress.UseCase) *ProgressController {
 }
 
 func (controller *ProgressController) RegisterRoutes(router gin.IRouter) {
-	progresses := router.Group("/users/:userID/progresses")
+	progresses := router.Group("/progresses")
 	{
 		progresses.GET("", controller.getByUserID)
-		progresses.GET("/problems/:problemID", controller.getByUserAndProblemID)
+		progresses.GET("/:problemID", controller.getByUserAndProblemID)
 	}
 }
 
 func (controller *ProgressController) getByUserID(c *gin.Context) {
-	progresses, err := controller.useCase.GetByUserID(c.Request.Context(), c.Param("userID"))
+	userID, ok := config.AuthenticatedUserID(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "missing authenticated user"})
+		return
+	}
+	progresses, err := controller.useCase.GetByUserID(c.Request.Context(), userID)
 	if err != nil {
 		writeProgressError(c, err)
 		return
@@ -36,7 +42,12 @@ func (controller *ProgressController) getByUserID(c *gin.Context) {
 }
 
 func (controller *ProgressController) getByUserAndProblemID(c *gin.Context) {
-	progress, err := controller.useCase.GetByUserAndProblemID(c.Request.Context(), c.Param("userID"), c.Param("problemID"))
+	userID, ok := config.AuthenticatedUserID(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "missing authenticated user"})
+		return
+	}
+	progress, err := controller.useCase.GetByUserAndProblemID(c.Request.Context(), userID, c.Param("problemID"))
 	if err != nil {
 		writeProgressError(c, err)
 		return
