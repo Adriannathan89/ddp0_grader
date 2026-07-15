@@ -44,8 +44,8 @@ services:
       REDIS_PORT: "6379"
       REDIS_PASSWORD: redis
       PORT: "8080"
-      ALLOWED_ORIGINS: http://localhost:3000,http://localhost:8080
-      AUTH_JWT_SECRET: ${AUTH_JWT_SECRET}
+      ALLOWED_ORIGINS: http://localhost:5173
+      AUTH_JWT_SECRET: ${AUTH_JWT_SECRET:-unsafe-default-key}
       AUTH_JWT_ISSUER: ${AUTH_JWT_ISSUER:-}
       AUTH_JWT_AUDIENCE: ${AUTH_JWT_AUDIENCE:-}
       AUTH_JWT_USER_ID_CLAIM: ${AUTH_JWT_USER_ID_CLAIM:-user_id}

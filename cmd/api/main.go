@@ -29,6 +29,7 @@ func main() {
 	testCaseRepo := repository.NewTestCaseRepository(config.DB)
 	progressRepo := repository.NewProgressRepository(config.DB)
 	userRepo := repository.NewUserRepository(config.DB)
+	leaderboardRepo := repository.NewLeaderboardRepository(config.DB)
 	jobQueue, err := queue.NewWithClient(config.RedisClient, queue.Config{
 		Stream:   "grader:jobs",
 		Group:    "grader-workers",
@@ -55,6 +56,7 @@ func main() {
 	problemController := controller.NewProblemController(problemUseCase)
 	testCaseController := controller.NewTestCaseController(testCaseUseCase)
 	progressController := controller.NewProgressController(progressUseCase)
+	leaderboardController := controller.NewLeaderboardController(leaderboardRepo)
 	go func() {
 		if err := jobQueue.WorkN(context.Background(), 10, gradingUseCase.GradeJob); err != nil && !errors.Is(err, context.Canceled) {
 			log.Printf("grader workers stopped: %v", err)
@@ -79,6 +81,7 @@ func main() {
 	protectedAPI.Use(authMiddleware)
 	submissionController.RegisterRoutes(protectedAPI)
 	progressController.RegisterRoutes(protectedAPI)
+	leaderboardController.RegisterRoutes(protectedAPI)
 
 	if err := router.Run(":" + config.GetEnv("PORT")); err != nil {
 		log.Fatal(err)
