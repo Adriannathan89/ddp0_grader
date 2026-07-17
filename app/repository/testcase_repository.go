@@ -33,7 +33,9 @@ func (r *testcaseRepository) GetTestCaseByID(id string) (*models.TestCase, error
 
 func (r *testcaseRepository) GetTestCasesByProblemID(problemID string) ([]models.TestCase, error) {
 	var testCases []models.TestCase
-	if err := r.db.Where("problem_id = ?", problemID).Find(&testCases).Error; err != nil {
+	// Keep the order deterministic for both the participant and admin views:
+	// public sample cases come first, then cases retain their creation order.
+	if err := r.db.Where("problem_id = ?", problemID).Order("is_hidden ASC").Order("created_at ASC").Find(&testCases).Error; err != nil {
 		log.Printf("Error retrieving test cases by problem ID: %v", err)
 		return nil, err
 	}

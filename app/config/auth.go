@@ -11,6 +11,7 @@ import (
 )
 
 const AuthUserIDContextKey = "auth_user_id"
+const AuthAccessTokenContextKey = "auth_access_token"
 
 type JWTAuthConfig struct {
 	SigningKey      string
@@ -77,8 +78,17 @@ func NewJWTAuthMiddleware(config JWTAuthConfig) (gin.HandlerFunc, error) {
 			return
 		}
 		c.Set(AuthUserIDContextKey, userID)
+		// Keep the already verified token available for downstream services that
+		// need to ask the identity provider for server-side authorization facts.
+		c.Set(AuthAccessTokenContextKey, rawToken)
 		c.Next()
 	}, nil
+}
+
+func AuthenticatedAccessToken(c *gin.Context) (string, bool) {
+	token, ok := c.Get(AuthAccessTokenContextKey)
+	value, isString := token.(string)
+	return value, ok && isString && value != ""
 }
 
 func AuthenticatedUserID(c *gin.Context) (string, bool) {

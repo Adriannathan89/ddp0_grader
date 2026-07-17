@@ -75,6 +75,9 @@ func (f *testCaseFake) GetByProblemID(_ context.Context, id string) ([]models.Te
 	}
 	return []models.TestCase{f.item}, nil
 }
+func (f *testCaseFake) GetAllByProblemID(ctx context.Context, id string) ([]models.TestCase, error) {
+	return f.GetByProblemID(ctx, id)
+}
 func (f *testCaseFake) Update(_ context.Context, id string, input testcaseuc.UpdateInput) (models.TestCase, error) {
 	if id != f.item.ID {
 		return models.TestCase{}, gorm.ErrRecordNotFound
@@ -134,7 +137,9 @@ func newRouter() *gin.Engine {
 	})
 	controller.NewHealthController().RegisterRoutes(api)
 	controller.NewProblemController(&problemFake{}).RegisterRoutes(api)
-	controller.NewTestCaseController(&testCaseFake{}).RegisterRoutes(api)
+	testCaseController := controller.NewTestCaseController(&testCaseFake{})
+	testCaseController.RegisterRoutes(api)
+	testCaseController.RegisterAdminRoutes(api)
 	controller.NewSubmissionController(&gradingFake{}).RegisterRoutes(api)
 	controller.NewProgressController(&progressFake{progress: models.Progress{ID: "progress-1", UserID: "user-1", ProblemID: "problem-1", Submissions: []models.Submission{{ID: "submission-1"}}}}).RegisterRoutes(api)
 	return router
@@ -178,6 +183,9 @@ func TestRoutesE2E(t *testing.T) {
 	}
 	if response := request(router, http.MethodGet, "/api/problems/problem-1/testcases", "", nil); response.Code != http.StatusOK {
 		t.Fatalf("GET testcases status = %d", response.Code)
+	}
+	if response := request(router, http.MethodGet, "/api/admin/problems/problem-1/testcases", "", nil); response.Code != http.StatusOK {
+		t.Fatalf("GET admin testcases status = %d", response.Code)
 	}
 	if response := request(router, http.MethodGet, "/api/testcases/testcase-1", "", nil); response.Code != http.StatusOK {
 		t.Fatalf("GET testcase status = %d", response.Code)

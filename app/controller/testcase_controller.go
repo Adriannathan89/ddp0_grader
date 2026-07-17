@@ -25,16 +25,39 @@ func NewTestCaseController(useCase testcase.UseCase) *TestCaseController {
 }
 
 func (controller *TestCaseController) RegisterRoutes(router gin.IRouter) {
+	controller.RegisterReadRoutes(router)
+	controller.RegisterWriteRoutes(router)
+}
+
+func (controller *TestCaseController) RegisterReadRoutes(router gin.IRouter) {
 	problems := router.Group("/problems/:id/testcases")
 	{
-		problems.POST("", controller.create)
 		problems.GET("", controller.getByProblemID)
 	}
 	testCases := router.Group("/testcases")
 	{
 		testCases.GET("/:id", controller.getByID)
+	}
+}
+
+func (controller *TestCaseController) RegisterWriteRoutes(router gin.IRouter) {
+	problems := router.Group("/problems/:id/testcases")
+	{
+		problems.POST("", controller.create)
+	}
+	testCases := router.Group("/testcases")
+	{
 		testCases.PATCH("/:id", controller.update)
 		testCases.DELETE("/:id", controller.delete)
+	}
+}
+
+// RegisterAdminRoutes exposes testcase content, including hidden input and
+// output. The caller must mount this only behind the Django-admin middleware.
+func (controller *TestCaseController) RegisterAdminRoutes(router gin.IRouter) {
+	adminProblems := router.Group("/admin/problems/:id/testcases")
+	{
+		adminProblems.GET("", controller.getAllByProblemID)
 	}
 }
 
@@ -55,6 +78,15 @@ func (controller *TestCaseController) create(c *gin.Context) {
 
 func (controller *TestCaseController) getByProblemID(c *gin.Context) {
 	testCases, err := controller.useCase.GetByProblemID(c.Request.Context(), c.Param("id"))
+	if err != nil {
+		writeTestCaseError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, testCases)
+}
+
+func (controller *TestCaseController) getAllByProblemID(c *gin.Context) {
+	testCases, err := controller.useCase.GetAllByProblemID(c.Request.Context(), c.Param("id"))
 	if err != nil {
 		writeTestCaseError(c, err)
 		return

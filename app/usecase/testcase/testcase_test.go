@@ -72,9 +72,28 @@ func TestUseCaseCRUD(t *testing.T) {
 	if err != nil || len(items) != 1 {
 		t.Fatalf("GetByProblemID() = (%d items, %v)", len(items), err)
 	}
+	allItems, err := useCase.GetAllByProblemID(ctx, "problem-1")
+	if err != nil || len(allItems) != 1 || allItems[0].Input != "1 41" {
+		t.Fatalf("GetAllByProblemID() = (%+v, %v)", allItems, err)
+	}
 
 	if err := useCase.Delete(ctx, created.ID); err != nil {
 		t.Fatalf("Delete() error = %v", err)
+	}
+}
+
+func TestGetByProblemIDMasksHiddenTestCaseButAdminReadDoesNot(t *testing.T) {
+	useCase := NewUseCase(
+		&fakeProblemRepository{problems: map[string]models.Problem{"problem-1": {ID: "problem-1"}}},
+		&fakeTestCaseRepository{items: map[string]models.TestCase{"case-1": {ID: "case-1", ProblemID: "problem-1", Input: "secret", Output: "answer", IsHidden: true}}},
+	)
+	public, err := useCase.GetByProblemID(context.Background(), "problem-1")
+	if err != nil || public[0].Input != "" || public[0].Output != "" {
+		t.Fatalf("public testcase = (%+v, %v)", public, err)
+	}
+	admin, err := useCase.GetAllByProblemID(context.Background(), "problem-1")
+	if err != nil || admin[0].Input != "secret" || admin[0].Output != "answer" {
+		t.Fatalf("admin testcase = (%+v, %v)", admin, err)
 	}
 }
 

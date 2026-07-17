@@ -30,6 +30,7 @@ type UseCase interface {
 	Create(ctx context.Context, input CreateInput) (models.TestCase, error)
 	GetByID(ctx context.Context, id string) (models.TestCase, error)
 	GetByProblemID(ctx context.Context, problemID string) ([]models.TestCase, error)
+	GetAllByProblemID(ctx context.Context, problemID string) ([]models.TestCase, error)
 	Update(ctx context.Context, id string, input UpdateInput) (models.TestCase, error)
 	Delete(ctx context.Context, id string) error
 }
@@ -70,9 +71,8 @@ func (uc *useCase) GetByID(_ context.Context, id string) (models.TestCase, error
 	return *testCase, nil
 }
 
-func (uc *useCase) GetByProblemID(_ context.Context, problemID string) ([]models.TestCase, error) {
-	var testCases []models.TestCase
-	testCases, err := uc.testCaseRepo.GetTestCasesByProblemID(strings.TrimSpace(problemID))
+func (uc *useCase) GetByProblemID(ctx context.Context, problemID string) ([]models.TestCase, error) {
+	testCases, err := uc.GetAllByProblemID(ctx, problemID)
 	if err != nil {
 		return nil, err
 	}
@@ -80,6 +80,12 @@ func (uc *useCase) GetByProblemID(_ context.Context, problemID string) ([]models
 	testCases = removePrivateTestCase(testCases)
 
 	return testCases, nil
+}
+
+// GetAllByProblemID is intentionally reserved for the Django-admin protected
+// route. Unlike the participant-facing method, it retains hidden input/output.
+func (uc *useCase) GetAllByProblemID(_ context.Context, problemID string) ([]models.TestCase, error) {
+	return uc.testCaseRepo.GetTestCasesByProblemID(strings.TrimSpace(problemID))
 }
 
 func removePrivateTestCase(testCases []models.TestCase) []models.TestCase {

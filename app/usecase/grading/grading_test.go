@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"ddp0_grader/app/models"
+	"ddp0_grader/app/repository"
 	"ddp0_grader/pkg/queue"
 	"ddp0_grader/pkg/runner"
 
@@ -51,6 +52,9 @@ func (r *fakeSubmissionRepository) SaveSubmission(submission *models.Submission)
 func (r *fakeSubmissionRepository) DeleteSubmission(submission *models.Submission) error {
 	delete(r.items, submission.ID)
 	return nil
+}
+func (r *fakeSubmissionRepository) GetAdminSubmissions(repository.AdminSubmissionFilter) ([]repository.AdminSubmission, int64, error) {
+	return nil, 0, nil
 }
 
 type fakeResultRepository struct{ saved []models.TestCaseResult }

@@ -29,11 +29,22 @@ func NewProblemController(useCase problem.UseCase) *ProblemController {
 }
 
 func (controller *ProblemController) RegisterRoutes(router gin.IRouter) {
+	controller.RegisterReadRoutes(router)
+	controller.RegisterWriteRoutes(router)
+}
+
+func (controller *ProblemController) RegisterReadRoutes(router gin.IRouter) {
+	problems := router.Group("/problems")
+	{
+		problems.GET("", controller.getAll)
+		problems.GET("/:id", controller.getByID)
+	}
+}
+
+func (controller *ProblemController) RegisterWriteRoutes(router gin.IRouter) {
 	problems := router.Group("/problems")
 	{
 		problems.POST("", controller.create)
-		problems.GET("", controller.getAll)
-		problems.GET("/:id", controller.getByID)
 		problems.PATCH("/:id", controller.update)
 		problems.DELETE("/:id", controller.delete)
 	}

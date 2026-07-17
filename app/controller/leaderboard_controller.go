@@ -27,6 +27,10 @@ func (lc *LeaderboardController) RegisterRoutes(router gin.IRouter) {
 	}
 }
 
+func (lc *LeaderboardController) RegisterAdminRoutes(router gin.IRouter) {
+	router.GET("/admin/leaderboard", lc.getAdminLeaderboard)
+}
+
 func (lc *LeaderboardController) getLeaderboardByProblemID(c *gin.Context) {
 	problemID := strings.TrimSpace(c.Param("problemID"))
 	if problemID == "" {
@@ -48,4 +52,13 @@ func (lc *LeaderboardController) getAllTimeLeaderboard(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"scores": leaderboard})
+}
+
+func (lc *LeaderboardController) getAdminLeaderboard(c *gin.Context) {
+	leaderboard, err := lc.leaderboardRepo.GetAdminLeaderboard()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to retrieve leaderboard"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"result": leaderboard})
 }
