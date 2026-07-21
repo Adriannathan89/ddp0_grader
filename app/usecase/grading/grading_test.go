@@ -163,6 +163,15 @@ type fakeGrader struct {
 	err     error
 }
 
+type fakeIdentityProvider struct {
+	user models.User
+	err  error
+}
+
+func (provider *fakeIdentityProvider) GetUser(context.Context, string) (models.User, error) {
+	return provider.user, provider.err
+}
+
 func (g *fakeGrader) Run(context.Context, *models.Submission, *models.Problem, []models.TestCase) ([]runner.TestResult, error) {
 	return g.results, g.err
 }
@@ -173,7 +182,7 @@ func TestSubmitQueuesSubmission(t *testing.T) {
 	jobQueue := &fakeQueue{}
 	progresses := &fakeProgressRepository{}
 	users := &fakeUserRepository{users: map[string]models.User{"user-1": {ID: "user-1", Email: "user@example.com"}}}
-	useCase := NewUseCase(&fakeProblemRepository{problem: problem}, submissions, &fakeResultRepository{}, progresses, users, jobQueue, &fakeGrader{})
+	useCase := NewUseCase(&fakeProblemRepository{problem: problem}, submissions, &fakeResultRepository{}, progresses, users, nil, jobQueue, &fakeGrader{})
 
 	submission, err := useCase.Submit(context.Background(), SubmitInput{ProblemID: "problem-1", UserID: "user-1", SourceCode: "print(1)"})
 	if err != nil {
@@ -189,7 +198,7 @@ func TestSubmitMarksQueueError(t *testing.T) {
 	submissions := &fakeSubmissionRepository{items: map[string]models.Submission{}}
 	progresses := &fakeProgressRepository{}
 	users := &fakeUserRepository{users: map[string]models.User{"user-1": {ID: "user-1"}}}
-	useCase := NewUseCase(&fakeProblemRepository{problem: problem}, submissions, &fakeResultRepository{}, progresses, users, &fakeQueue{err: errors.New("redis unavailable")}, &fakeGrader{})
+	useCase := NewUseCase(&fakeProblemRepository{problem: problem}, submissions, &fakeResultRepository{}, progresses, users, nil, &fakeQueue{err: errors.New("redis unavailable")}, &fakeGrader{})
 
 	_, err := useCase.Submit(context.Background(), SubmitInput{ProblemID: "problem-1", UserID: "user-1", SourceCode: "print(1)"})
 	if err == nil || submissions.last.Status != models.SubmissionStatusQueued {
@@ -205,7 +214,7 @@ func TestGradeJobSavesBatchResultsAndSubmission(t *testing.T) {
 		{TestCaseID: "tc-1", Passed: true, Verdict: runner.VerdictAccepted, RunTime: 12 * time.Millisecond},
 		{TestCaseID: "tc-2", Passed: false, Verdict: runner.VerdictWrongAnswer, RunTime: 8 * time.Millisecond, Stderr: "expected 2"},
 	}}
-	useCase := NewUseCase(&fakeProblemRepository{}, submissions, results, progresses, &fakeUserRepository{users: map[string]models.User{}}, &fakeQueue{}, grader)
+	useCase := NewUseCase(&fakeProblemRepository{}, submissions, results, progresses, &fakeUserRepository{users: map[string]models.User{}}, nil, &fakeQueue{}, grader)
 	job := queue.Job{Submission: models.Submission{ID: "submission-1", ProgressID: "progress-1", Status: models.SubmissionStatusQueued}, Problem: models.Problem{ID: "problem-1"}, TestCases: []models.TestCase{{ID: "tc-1"}, {ID: "tc-2"}}}
 
 	if err := useCase.GradeJob(context.Background(), job); err != nil {
@@ -221,10 +230,35 @@ func TestGradeJobSavesBatchResultsAndSubmission(t *testing.T) {
 
 func TestGradeJobMarksSystemError(t *testing.T) {
 	submissions := &fakeSubmissionRepository{items: map[string]models.Submission{}}
-	useCase := NewUseCase(&fakeProblemRepository{}, submissions, &fakeResultRepository{}, &fakeProgressRepository{}, &fakeUserRepository{users: map[string]models.User{}}, &fakeQueue{}, &fakeGrader{err: errors.New("runner unavailable")})
+	useCase := NewUseCase(&fakeProblemRepository{}, submissions, &fakeResultRepository{}, &fakeProgressRepository{}, &fakeUserRepository{users: map[string]models.User{}}, nil, &fakeQueue{}, &fakeGrader{err: errors.New("runner unavailable")})
 	err := useCase.GradeJob(context.Background(), queue.Job{Submission: models.Submission{ID: "submission-1"}})
 	if err == nil || submissions.last.Status != models.SubmissionStatusWrongAnswer {
 		t.Fatalf("GradeJob() error = %v, saved submission = %+v", err, submissions.last)
+	}
+}
+
+func TestSubmitCreatesMissingUserFromIdentityProvider(t *testing.T) {
+	problem := models.Problem{ID: "problem-1"}
+	users := &fakeUserRepository{users: map[string]models.User{}}
+	identityProvider := &fakeIdentityProvider{user: models.User{ID: "user-1", Email: "user@example.com"}}
+	useCase := NewUseCase(&fakeProblemRepository{problem: problem}, &fakeSubmissionRepository{items: map[string]models.Submission{}}, &fakeResultRepository{}, &fakeProgressRepository{}, users, identityProvider, &fakeQueue{}, &fakeGrader{})
+
+	if _, err := useCase.Submit(context.Background(), SubmitInput{ProblemID: "problem-1", UserID: "user-1", AccessToken: "access-token", SourceCode: "print(1)"}); err != nil {
+		t.Fatalf("Submit() error = %v", err)
+	}
+	if user, ok := users.users["user-1"]; !ok || user.Email != "user@example.com" {
+		t.Fatalf("created user = %#v, exists = %t", user, ok)
+	}
+}
+
+func TestSubmitRejectsMismatchedIdentityUser(t *testing.T) {
+	problem := models.Problem{ID: "problem-1"}
+	identityProvider := &fakeIdentityProvider{user: models.User{ID: "another-user", Email: "user@example.com"}}
+	useCase := NewUseCase(&fakeProblemRepository{problem: problem}, &fakeSubmissionRepository{items: map[string]models.Submission{}}, &fakeResultRepository{}, &fakeProgressRepository{}, &fakeUserRepository{users: map[string]models.User{}}, identityProvider, &fakeQueue{}, &fakeGrader{})
+
+	_, err := useCase.Submit(context.Background(), SubmitInput{ProblemID: "problem-1", UserID: "user-1", AccessToken: "access-token", SourceCode: "print(1)"})
+	if err == nil || err.Error() != "Django user id does not match authenticated user" {
+		t.Fatalf("Submit() error = %v", err)
 	}
 }
 

@@ -133,6 +133,7 @@ func newRouter() *gin.Engine {
 	api := router.Group("/api")
 	api.Use(func(c *gin.Context) {
 		c.Set(config.AuthUserIDContextKey, "user-1")
+		c.Set(config.AuthAccessTokenContextKey, "access-token")
 		c.Next()
 	})
 	controller.NewHealthController().RegisterRoutes(api)

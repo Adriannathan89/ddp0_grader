@@ -63,12 +63,17 @@ func (controller *SubmissionController) getByID(c *gin.Context) {
 func (controller *SubmissionController) grade(c *gin.Context) {
 	problemID := strings.TrimSpace(c.PostForm("problem_id"))
 	userID, ok := config.AuthenticatedUserID(c)
+	accessToken, hasAccessToken := config.AuthenticatedAccessToken(c)
 	if problemID == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "problem_id is required"})
 		return
 	}
 	if !ok {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "missing authenticated user"})
+		return
+	}
+	if !hasAccessToken {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "missing authenticated access token"})
 		return
 	}
 
@@ -103,9 +108,10 @@ func (controller *SubmissionController) grade(c *gin.Context) {
 	}
 
 	submission, err := controller.grading.Submit(c.Request.Context(), grading.SubmitInput{
-		ProblemID:  problemID,
-		UserID:     userID,
-		SourceCode: string(source),
+		ProblemID:   problemID,
+		UserID:      userID,
+		AccessToken: accessToken,
+		SourceCode:  string(source),
 	})
 	if err != nil {
 		status := http.StatusInternalServerError

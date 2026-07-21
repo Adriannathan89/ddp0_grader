@@ -47,13 +47,17 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	userIdentityProvider, err := config.NewDjangoUserProviderFromEnv()
+	if err != nil {
+		log.Fatal(err)
+	}
 	grader := runner.New(runner.Config{
 		Image:           "python:3.12-slim",
 		OutputLimit:     1 << 20,
 		DefaultTime:     2 * time.Second,
 		DefaultMemoryMB: 256,
 	})
-	gradingUseCase := grading.NewUseCase(problemRepo, submissionRepo, resultRepo, progressRepo, userRepo, jobQueue, grader)
+	gradingUseCase := grading.NewUseCase(problemRepo, submissionRepo, resultRepo, progressRepo, userRepo, userIdentityProvider, jobQueue, grader)
 	problemUseCase := problem.NewUseCase(problemRepo)
 	testCaseUseCase := testcase.NewUseCase(problemRepo, testCaseRepo)
 	progressUseCase := progressuc.NewUseCase(progressRepo)

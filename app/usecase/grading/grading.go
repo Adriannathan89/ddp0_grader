@@ -15,9 +15,10 @@ import (
 )
 
 type SubmitInput struct {
-	ProblemID  string
-	UserID     string
-	SourceCode string
+	ProblemID   string
+	UserID      string
+	AccessToken string
+	SourceCode  string
 }
 
 type UseCase interface {
@@ -34,14 +35,21 @@ type Grader interface {
 	Run(ctx context.Context, submission *models.Submission, problem *models.Problem, testCases []models.TestCase) ([]runner.TestResult, error)
 }
 
+// UserIdentityProvider obtains the current user from the identity service.
+// It is called only when the user has not yet been stored locally.
+type UserIdentityProvider interface {
+	GetUser(ctx context.Context, accessToken string) (models.User, error)
+}
+
 type useCase struct {
-	problemRepo    repository.ProblemRepository
-	submissionRepo repository.SubmissionRepository
-	resultRepo     repository.TestCaseResultRepository
-	progressRepo   repository.ProgressRepository
-	userRepo       repository.UserRepository
-	jobQueue       JobQueue
-	grader         Grader
+	problemRepo      repository.ProblemRepository
+	submissionRepo   repository.SubmissionRepository
+	resultRepo       repository.TestCaseResultRepository
+	progressRepo     repository.ProgressRepository
+	userRepo         repository.UserRepository
+	identityProvider UserIdentityProvider
+	jobQueue         JobQueue
+	grader           Grader
 }
 
 func NewUseCase(
@@ -50,17 +58,19 @@ func NewUseCase(
 	resultRepo repository.TestCaseResultRepository,
 	progressRepo repository.ProgressRepository,
 	userRepo repository.UserRepository,
+	identityProvider UserIdentityProvider,
 	jobQueue JobQueue,
 	grader Grader,
 ) UseCase {
 	return &useCase{
-		problemRepo:    problemRepo,
-		submissionRepo: submissionRepo,
-		resultRepo:     resultRepo,
-		progressRepo:   progressRepo,
-		userRepo:       userRepo,
-		jobQueue:       jobQueue,
-		grader:         grader,
+		problemRepo:      problemRepo,
+		submissionRepo:   submissionRepo,
+		resultRepo:       resultRepo,
+		progressRepo:     progressRepo,
+		userRepo:         userRepo,
+		identityProvider: identityProvider,
+		jobQueue:         jobQueue,
+		grader:           grader,
 	}
 }
 
@@ -69,7 +79,7 @@ func (uc *useCase) Submit(ctx context.Context, input SubmitInput) (models.Submis
 	if err != nil {
 		return models.Submission{}, err
 	}
-	if _, err := uc.userRepo.GetUserByID(input.UserID); err != nil {
+	if err := uc.ensureUser(ctx, input.UserID, input.AccessToken); err != nil {
 		return models.Submission{}, err
 	}
 	existingProgress, err := uc.progressRepo.GetProgressByProblemAndUser(input.ProblemID, input.UserID)
@@ -110,6 +120,33 @@ func (uc *useCase) Submit(ctx context.Context, input SubmitInput) (models.Submis
 	}
 
 	return submission, nil
+}
+
+func (uc *useCase) ensureUser(ctx context.Context, userID, accessToken string) error {
+	if _, err := uc.userRepo.GetUserByID(userID); err == nil {
+		return nil
+	} else if !errors.Is(err, gorm.ErrRecordNotFound) {
+		return err
+	}
+	if uc.identityProvider == nil {
+		return errors.New("user identity provider is not configured")
+	}
+
+	user, err := uc.identityProvider.GetUser(ctx, accessToken)
+	if err != nil {
+		return err
+	}
+	if user.ID != userID {
+		return errors.New("Django user id does not match authenticated user")
+	}
+	if err := uc.userRepo.SaveUser(&user); err != nil {
+		// A concurrent submission may have inserted the same user already.
+		if _, lookupErr := uc.userRepo.GetUserByID(userID); lookupErr == nil {
+			return nil
+		}
+		return err
+	}
+	return nil
 }
 
 func (uc *useCase) GetSubmission(_ context.Context, id string) (models.Submission, error) {

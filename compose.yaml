@@ -52,6 +52,7 @@ services:
       AUTH_JWT_TOKEN_TYPE_CLAIM: ${AUTH_JWT_TOKEN_TYPE_CLAIM:-token_type}
       AUTH_JWT_ACCESS_TOKEN_TYPE: ${AUTH_JWT_ACCESS_TOKEN_TYPE:-access}
       DJANGO_ADMIN_ME_URL: ${DJANGO_ADMIN_ME_URL:-http://host.docker.internal:8000/api/admin/me/}
+      DJANGO_ME_URL: ${DJANGO_ME_URL:-http://host.docker.internal:8000/api/me}
     depends_on:
       db:
         condition: service_healthy
