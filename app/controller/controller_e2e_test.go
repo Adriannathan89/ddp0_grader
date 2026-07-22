@@ -108,7 +108,8 @@ func (f *gradingFake) GetSubmission(_ context.Context, id string) (models.Submis
 	}
 	return f.submission, nil
 }
-func (f *gradingFake) GradeJob(context.Context, queue.Job) error { return nil }
+func (f *gradingFake) GradeJob(context.Context, queue.Job) error                { return nil }
+func (f *gradingFake) MarkJobExhausted(context.Context, queue.Job, error) error { return nil }
 
 type progressFake struct {
 	progress models.Progress

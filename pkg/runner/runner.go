@@ -112,6 +112,17 @@ func (r *Runner) Run(ctx context.Context, submission *models.Submission, problem
 		result.TestCaseID = tc.ID
 		results = append(results, result)
 	}
+	if len(results) > 0 {
+		systemErrors := 0
+		for _, result := range results {
+			if result.Verdict == VerdictSystemError {
+				systemErrors++
+			}
+		}
+		if systemErrors == len(results) {
+			return nil, errors.New("runner could not execute any testcase")
+		}
+	}
 	return results, nil
 }
 
@@ -142,6 +153,11 @@ func (r *Runner) RunTestCase(parent context.Context, source string, tc models.Te
 		result.Error = err
 		return result
 	}
+	// Name every container so it can be force-removed even when the docker CLI
+	// is killed by the outer timeout. Without this, --rm only cleans up after a
+	// normal docker-run exit and a stuck submission can outlive its worker.
+	containerName := "grader-" + filepath.Base(dir)
+	defer r.removeContainer(containerName)
 	sourcePath := filepath.Join(dir, "main.py")
 	if err = os.WriteFile(sourcePath, []byte(source), 0444); err != nil {
 		result.Error = err
@@ -150,9 +166,10 @@ func (r *Runner) RunTestCase(parent context.Context, source string, tc models.Te
 
 	stdout := &limitedBuffer{limit: r.config.OutputLimit}
 	stderr := &limitedBuffer{limit: r.config.OutputLimit}
-	args := []string{"run", "--rm", "-i", "--network", "none", "--read-only", "--init",
+	args := []string{"run", "--name", containerName, "--rm", "-i", "--network", "none", "--read-only", "--init", "--stop-timeout", "1",
 		"--memory", strconv.Itoa(memory) + "m", "--memory-swap", strconv.Itoa(memory) + "m",
-		"--cpus", "1", "--pids-limit", "64", "--cap-drop", "ALL", "--security-opt", "no-new-privileges",
+		"--cpus", "1", "--pids-limit", "64", "--ulimit", "nofile=64:64", "--ulimit", "core=0",
+		"--cap-drop", "ALL", "--security-opt", "no-new-privileges",
 		"--user", "65534:65534", "--tmpfs", "/tmp:rw,noexec,nosuid,size=64m",
 		"--mount", "type=bind,src=" + dir + ",dst=/runner,readonly",
 		r.config.Image, "python", "-c", pythonCommand(limit)}
@@ -164,9 +181,9 @@ func (r *Runner) RunTestCase(parent context.Context, source string, tc models.Te
 	var pythonTimedOut bool
 	result.RunTime, rawStderr, pythonTimedOut = pythonRuntime(rawStderr, time.Since(hostStarted))
 	result.Stdout, result.Stderr = stdout.String(), rawStderr
-	if stdout.exceeded {
+	if stdout.exceeded || stderr.exceeded {
 		result.Verdict = VerdictOutputLimit
-		result.Error = errors.New("stdout exceeded configured limit")
+		result.Error = errors.New("program output exceeded configured limit")
 		return result
 	}
 	if pythonTimedOut {
@@ -181,6 +198,9 @@ func (r *Runner) RunTestCase(parent context.Context, source string, tc models.Te
 	}
 	if err != nil {
 		result.Verdict = VerdictRuntimeError
+		if errors.Is(err, exec.ErrNotFound) {
+			result.Verdict = VerdictSystemError
+		}
 		if exitErr, ok := err.(*exec.ExitError); ok && exitErr.ExitCode() >= 125 {
 			result.Verdict = VerdictSystemError
 		}
@@ -198,6 +218,15 @@ func (r *Runner) RunTestCase(parent context.Context, source string, tc models.Te
 		result.Verdict = VerdictWrongAnswer
 	}
 	return result
+}
+
+func (r *Runner) removeContainer(containerName string) {
+	// Do not use the run context: it may already be expired. The generated name
+	// is local to this invocation, and a failed cleanup is harmless because
+	// Docker's --rm remains a second cleanup path.
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	_ = exec.CommandContext(ctx, r.config.DockerBinary, "rm", "-f", containerName).Run()
 }
 
 func pythonRuntime(stderr string, fallback time.Duration) (time.Duration, string, bool) {

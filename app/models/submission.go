@@ -7,6 +7,7 @@ const (
 	SubmissionStatusWrongAnswer        = "wrong_answer"
 	SubmissionStatusTimeLimitExceded   = "time_limit_exceded"
 	SubmissionStatusMemoryLimitExceded = "memory_limit_exceded"
+	SubmissionStatusSystemError        = "system_error"
 	SubmissionStatusAccepted           = "accepted"
 )
 

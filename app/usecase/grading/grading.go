@@ -21,10 +21,18 @@ type SubmitInput struct {
 	SourceCode  string
 }
 
+const (
+	maxTestCasesPerSubmission = 100
+	maxFeedbackBytes          = 4 << 10
+)
+
+var ErrTooManyTestCases = errors.New("problem has too many testcases to grade")
+
 type UseCase interface {
 	Submit(ctx context.Context, input SubmitInput) (models.Submission, error)
 	GetSubmission(ctx context.Context, id string) (models.Submission, error)
 	GradeJob(ctx context.Context, job queue.Job) error
+	MarkJobExhausted(ctx context.Context, job queue.Job, cause error) error
 }
 
 type JobQueue interface {
@@ -79,6 +87,9 @@ func (uc *useCase) Submit(ctx context.Context, input SubmitInput) (models.Submis
 	if err != nil {
 		return models.Submission{}, err
 	}
+	if len(problem.TestCases) > maxTestCasesPerSubmission {
+		return models.Submission{}, ErrTooManyTestCases
+	}
 	if err := uc.ensureUser(ctx, input.UserID, input.AccessToken); err != nil {
 		return models.Submission{}, err
 	}
@@ -116,7 +127,8 @@ func (uc *useCase) Submit(ctx context.Context, input SubmitInput) (models.Submis
 		TestCases:  problem.TestCases,
 	})
 	if err != nil {
-		return models.Submission{}, err
+		submission.Status = models.SubmissionStatusSystemError
+		return models.Submission{}, errors.Join(err, uc.submissionRepo.SaveSubmission(&submission))
 	}
 
 	return submission, nil
@@ -161,7 +173,7 @@ func (uc *useCase) GetSubmission(_ context.Context, id string) (models.Submissio
 func (uc *useCase) GradeJob(ctx context.Context, job queue.Job) error {
 	results, err := uc.grader.Run(ctx, &job.Submission, &job.Problem, job.TestCases)
 	if err != nil {
-		job.Submission.Status = models.SubmissionStatusWrongAnswer
+		job.Submission.Status = models.SubmissionStatusSystemError
 		updateErr := uc.submissionRepo.SaveSubmission(&job.Submission)
 		return errors.Join(err, updateErr)
 	}
@@ -188,11 +200,11 @@ func (uc *useCase) GradeJob(ctx context.Context, job queue.Job) error {
 			MemoryUsage:  0,
 		}
 		if result.Error != nil {
-			message := result.Error.Error()
+			message := truncateFeedback(result.Error.Error())
 			dbResult.ErrorMessage = &message
 			dbResult.Feedback = &message
 		} else if result.Stderr != "" {
-			feedback := result.Stderr
+			feedback := truncateFeedback(result.Stderr)
 			dbResult.Feedback = &feedback
 		}
 		dbResults = append(dbResults, dbResult)
@@ -213,6 +225,20 @@ func (uc *useCase) GradeJob(ctx context.Context, job queue.Job) error {
 		return err
 	}
 
+	return uc.submissionRepo.SaveSubmission(&job.Submission)
+}
+
+func truncateFeedback(value string) string {
+	if len(value) > maxFeedbackBytes {
+		return value[:maxFeedbackBytes]
+	}
+	return value
+}
+
+// MarkJobExhausted records the terminal infrastructure failure before Queue
+// acknowledges the message and moves it to the dead-letter stream.
+func (uc *useCase) MarkJobExhausted(_ context.Context, job queue.Job, _ error) error {
+	job.Submission.Status = models.SubmissionStatusSystemError
 	return uc.submissionRepo.SaveSubmission(&job.Submission)
 }
 

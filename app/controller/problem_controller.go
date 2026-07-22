@@ -14,6 +14,8 @@ type ProblemController struct {
 	useCase problem.UseCase
 }
 
+const maxProblemRequestBytes = 96 << 10
+
 type problemRequest struct {
 	Title       string `json:"title"`
 	Description string `json:"description"`
@@ -104,7 +106,13 @@ func (controller *ProblemController) delete(c *gin.Context) {
 
 func bindProblemRequest(c *gin.Context) (problemRequest, bool) {
 	var request problemRequest
+	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, maxProblemRequestBytes)
 	if err := c.ShouldBindJSON(&request); err != nil {
+		var maxErr *http.MaxBytesError
+		if errors.As(err, &maxErr) {
+			c.JSON(http.StatusRequestEntityTooLarge, gin.H{"error": "problem request is too large"})
+			return problemRequest{}, false
+		}
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid JSON request"})
 		return problemRequest{}, false
 	}

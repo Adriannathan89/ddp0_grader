@@ -1,8 +1,11 @@
 package runner
 
 import (
+	"context"
 	"testing"
 	"time"
+
+	"ddp0_grader/app/models"
 )
 
 func TestEqualTokens(t *testing.T) {
@@ -37,5 +40,13 @@ func TestPythonRuntimeFallback(t *testing.T) {
 	got, stderr, timedOut := pythonRuntime("python failed", fallback)
 	if got != fallback || timedOut || stderr != "python failed" {
 		t.Fatalf("unexpected fallback: runtime=%v stderr=%q", got, stderr)
+	}
+}
+
+func TestRunReturnsErrorWhenRunnerCannotExecuteAnyTestCase(t *testing.T) {
+	r := New(Config{DockerBinary: "definitely-not-a-docker-binary"})
+	_, err := r.Run(context.Background(), &models.Submission{SourceCode: "print(1)"}, &models.Problem{TimeLimit: 10, MemoryLimit: 16}, []models.TestCase{{ID: "case-1"}})
+	if err == nil {
+		t.Fatal("expected an infrastructure error when docker cannot be started")
 	}
 }

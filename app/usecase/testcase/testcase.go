@@ -13,6 +13,11 @@ import (
 
 var ErrInvalidInput = errors.New("invalid testcase input")
 
+const (
+	MaxInputBytes  = 64 << 10
+	MaxOutputBytes = 64 << 10
+)
+
 type CreateInput struct {
 	ProblemID string
 	Input     string
@@ -126,6 +131,9 @@ func (uc *useCase) Delete(_ context.Context, id string) error {
 }
 
 func applyInput(testCase *models.TestCase, input, output string, isHidden bool) error {
+	if len(input) > MaxInputBytes || len(output) > MaxOutputBytes {
+		return ErrInvalidInput
+	}
 	testCase.Input = input
 	testCase.Output = output
 	testCase.IsHidden = isHidden

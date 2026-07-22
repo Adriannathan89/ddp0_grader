@@ -13,6 +13,14 @@ import (
 
 var ErrInvalidInput = errors.New("invalid problem input")
 
+const (
+	maxTitleBytes       = 256
+	maxDescriptionBytes = 64 << 10
+	maxAuthorBytes      = 256
+	maxTimeLimitMS      = 10_000
+	maxMemoryLimitMB    = 1_024
+)
+
 type CreateInput struct {
 	Title       string
 	Description string
@@ -94,7 +102,7 @@ func applyInput(problem *models.Problem, input CreateInput) error {
 	problem.Difficulty = strings.ToLower(strings.TrimSpace(input.Difficulty))
 	problem.TimeLimit = input.TimeLimit
 	problem.MemoryLimit = input.MemoryLimit
-	if problem.Title == "" || problem.Description == "" || problem.Author == "" || !isValidTag(problem.Tag) || !isValidDifficulty(problem.Difficulty) || problem.TimeLimit <= 0 || problem.MemoryLimit <= 0 {
+	if problem.Title == "" || problem.Description == "" || problem.Author == "" || len(problem.Title) > maxTitleBytes || len(problem.Description) > maxDescriptionBytes || len(problem.Author) > maxAuthorBytes || !isValidTag(problem.Tag) || !isValidDifficulty(problem.Difficulty) || problem.TimeLimit <= 0 || problem.TimeLimit > maxTimeLimitMS || problem.MemoryLimit <= 0 || problem.MemoryLimit > maxMemoryLimitMB {
 		return ErrInvalidInput
 	}
 	return nil

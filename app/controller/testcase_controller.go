@@ -14,6 +14,8 @@ type TestCaseController struct {
 	useCase testcase.UseCase
 }
 
+const maxTestCaseRequestBytes = testcase.MaxInputBytes + testcase.MaxOutputBytes + 16<<10
+
 type testCaseRequest struct {
 	Input    string `json:"input"`
 	Output   string `json:"output"`
@@ -128,7 +130,13 @@ func (controller *TestCaseController) delete(c *gin.Context) {
 
 func bindTestCaseRequest(c *gin.Context) (testCaseRequest, bool) {
 	var request testCaseRequest
+	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, maxTestCaseRequestBytes)
 	if err := c.ShouldBindJSON(&request); err != nil {
+		var maxErr *http.MaxBytesError
+		if errors.As(err, &maxErr) {
+			c.JSON(http.StatusRequestEntityTooLarge, gin.H{"error": "testcase request is too large"})
+			return testCaseRequest{}, false
+		}
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid JSON request"})
 		return testCaseRequest{}, false
 	}

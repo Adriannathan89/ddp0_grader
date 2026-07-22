@@ -32,9 +32,8 @@ func main() {
 	userRepo := repository.NewUserRepository(config.DB)
 	leaderboardRepo := repository.NewLeaderboardRepository(config.DB)
 	jobQueue, err := queue.NewWithClient(config.RedisClient, queue.Config{
-		Stream:   "grader:jobs",
-		Group:    "grader-workers",
-		Consumer: "api-worker",
+		Stream: "grader:jobs",
+		Group:  "grader-workers",
 	})
 	if err != nil {
 		log.Fatal(err)
@@ -53,7 +52,7 @@ func main() {
 	}
 	grader := runner.New(runner.Config{
 		Image:           "python:3.12-slim",
-		OutputLimit:     1 << 20,
+		OutputLimit:     64 << 10,
 		DefaultTime:     2 * time.Second,
 		DefaultMemoryMB: 256,
 	})
@@ -68,7 +67,7 @@ func main() {
 	progressController := controller.NewProgressController(progressUseCase)
 	leaderboardController := controller.NewLeaderboardController(leaderboardRepo)
 	go func() {
-		if err := jobQueue.WorkN(context.Background(), 10, gradingUseCase.GradeJob); err != nil && !errors.Is(err, context.Canceled) {
+		if err := jobQueue.WorkNWithExhaustedHandler(context.Background(), 10, gradingUseCase.GradeJob, gradingUseCase.MarkJobExhausted); err != nil && !errors.Is(err, context.Canceled) {
 			log.Printf("grader workers stopped: %v", err)
 		}
 	}()

@@ -201,7 +201,7 @@ func TestSubmitMarksQueueError(t *testing.T) {
 	useCase := NewUseCase(&fakeProblemRepository{problem: problem}, submissions, &fakeResultRepository{}, progresses, users, nil, &fakeQueue{err: errors.New("redis unavailable")}, &fakeGrader{})
 
 	_, err := useCase.Submit(context.Background(), SubmitInput{ProblemID: "problem-1", UserID: "user-1", SourceCode: "print(1)"})
-	if err == nil || submissions.last.Status != models.SubmissionStatusQueued {
+	if err == nil || submissions.last.Status != models.SubmissionStatusSystemError {
 		t.Fatalf("Submit() error = %v, saved submission = %+v", err, submissions.last)
 	}
 }
@@ -232,8 +232,21 @@ func TestGradeJobMarksSystemError(t *testing.T) {
 	submissions := &fakeSubmissionRepository{items: map[string]models.Submission{}}
 	useCase := NewUseCase(&fakeProblemRepository{}, submissions, &fakeResultRepository{}, &fakeProgressRepository{}, &fakeUserRepository{users: map[string]models.User{}}, nil, &fakeQueue{}, &fakeGrader{err: errors.New("runner unavailable")})
 	err := useCase.GradeJob(context.Background(), queue.Job{Submission: models.Submission{ID: "submission-1"}})
-	if err == nil || submissions.last.Status != models.SubmissionStatusWrongAnswer {
+	if err == nil || submissions.last.Status != models.SubmissionStatusSystemError {
 		t.Fatalf("GradeJob() error = %v, saved submission = %+v", err, submissions.last)
+	}
+}
+
+func TestMarkJobExhaustedMarksSubmissionSystemError(t *testing.T) {
+	submissions := &fakeSubmissionRepository{items: map[string]models.Submission{}}
+	useCase := NewUseCase(&fakeProblemRepository{}, submissions, &fakeResultRepository{}, &fakeProgressRepository{}, &fakeUserRepository{users: map[string]models.User{}}, nil, &fakeQueue{}, &fakeGrader{})
+	job := queue.Job{Submission: models.Submission{ID: "submission-1", Status: models.SubmissionStatusQueued}}
+
+	if err := useCase.MarkJobExhausted(context.Background(), job, errors.New("database unavailable")); err != nil {
+		t.Fatalf("MarkJobExhausted() error = %v", err)
+	}
+	if submissions.last.Status != models.SubmissionStatusSystemError {
+		t.Fatalf("saved submission status = %q", submissions.last.Status)
 	}
 }
 

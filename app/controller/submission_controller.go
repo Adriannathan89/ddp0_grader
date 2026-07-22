@@ -117,6 +117,8 @@ func (controller *SubmissionController) grade(c *gin.Context) {
 		status := http.StatusInternalServerError
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			status = http.StatusNotFound
+		} else if errors.Is(err, grading.ErrTooManyTestCases) {
+			status = http.StatusBadRequest
 		}
 		c.JSON(status, gin.H{"error": err.Error()})
 		return
