@@ -21,6 +21,8 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+const graderWorkers = 4
+
 func main() {
 	config.InitConfig()
 
@@ -32,8 +34,12 @@ func main() {
 	userRepo := repository.NewUserRepository(config.DB)
 	leaderboardRepo := repository.NewLeaderboardRepository(config.DB)
 	jobQueue, err := queue.NewWithClient(config.RedisClient, queue.Config{
-		Stream: "grader:jobs",
-		Group:  "grader-workers",
+		Stream:           "grader:jobs",
+		Group:            "grader-workers",
+		MaxAttempts:      3,
+		RetryDelay:       10 * time.Second,
+		ClaimIdle:        2 * time.Minute,
+		DeadLetterMaxLen: 10_000,
 	})
 	if err != nil {
 		log.Fatal(err)
@@ -54,7 +60,7 @@ func main() {
 		Image:           "python:3.12-slim",
 		OutputLimit:     64 << 10,
 		DefaultTime:     2 * time.Second,
-		DefaultMemoryMB: 256,
+		DefaultMemoryMB: 64,
 	})
 	gradingUseCase := grading.NewUseCase(problemRepo, submissionRepo, resultRepo, progressRepo, userRepo, userIdentityProvider, jobQueue, grader)
 	problemUseCase := problem.NewUseCase(problemRepo)
@@ -67,7 +73,7 @@ func main() {
 	progressController := controller.NewProgressController(progressUseCase)
 	leaderboardController := controller.NewLeaderboardController(leaderboardRepo)
 	go func() {
-		if err := jobQueue.WorkNWithExhaustedHandler(context.Background(), 10, gradingUseCase.GradeJob, gradingUseCase.MarkJobExhausted); err != nil && !errors.Is(err, context.Canceled) {
+		if err := jobQueue.WorkNWithExhaustedHandler(context.Background(), graderWorkers, gradingUseCase.GradeJob, gradingUseCase.MarkJobExhausted); err != nil && !errors.Is(err, context.Canceled) {
 			log.Printf("grader workers stopped: %v", err)
 		}
 	}()
