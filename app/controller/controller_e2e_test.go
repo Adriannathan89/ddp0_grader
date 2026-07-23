@@ -25,7 +25,7 @@ import (
 type problemFake struct{ item models.Problem }
 
 func (f *problemFake) Create(_ context.Context, input problemuc.CreateInput) (models.Problem, error) {
-	f.item = models.Problem{ID: "problem-1", Title: input.Title, Description: input.Description, Author: input.Author, Tag: input.Tag, Difficulty: input.Difficulty, TimeLimit: input.TimeLimit, MemoryLimit: input.MemoryLimit}
+	f.item = models.Problem{ID: "problem-1", Title: input.Title, Description: input.Description, Author: input.Author, Tag: input.Tag, Difficulty: input.Difficulty, TimeLimit: input.TimeLimit, MemoryLimit: input.MemoryLimit, Hint: input.Hint}
 	return f.item, nil
 }
 func (f *problemFake) GetAll(context.Context) ([]models.Problem, error) {
@@ -43,7 +43,7 @@ func (f *problemFake) Update(_ context.Context, id string, input problemuc.Updat
 	}
 	f.item.Title, f.item.Description, f.item.Author = input.Title, input.Description, input.Author
 	f.item.Tag, f.item.Difficulty = input.Tag, input.Difficulty
-	f.item.TimeLimit, f.item.MemoryLimit = input.TimeLimit, input.MemoryLimit
+	f.item.TimeLimit, f.item.MemoryLimit, f.item.Hint = input.TimeLimit, input.MemoryLimit, input.Hint
 	return f.item, nil
 }
 func (f *problemFake) Delete(_ context.Context, id string) error {
@@ -164,7 +164,7 @@ func TestRoutesE2E(t *testing.T) {
 		t.Fatalf("GET /api/health status = %d, want 200", response.Code)
 	}
 
-	problemBody := `{"title":"Sum","description":"Add two integers","created_by":"lecturer","tag":"math","difficulty":"easy","time_limit":2,"memory_limit":256}`
+	problemBody := `{"title":"Sum","description":"Add two integers","created_by":"lecturer","tag":"math","difficulty":"easy","time_limit":2,"memory_limit":256,"hint":"Tambahkan dua nilai."}`
 	if response := request(router, http.MethodPost, "/api/problems", "application/json", bytes.NewBufferString(problemBody)); response.Code != http.StatusCreated {
 		t.Fatalf("POST /api/problems status = %d, body = %s", response.Code, response.Body.String())
 	}

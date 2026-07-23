@@ -10,6 +10,7 @@ import (
 	"ddp0_grader/app/config"
 	"ddp0_grader/app/controller"
 	"ddp0_grader/app/repository"
+	"ddp0_grader/app/storage"
 	"ddp0_grader/app/usecase/grading"
 	"ddp0_grader/app/usecase/problem"
 	progressuc "ddp0_grader/app/usecase/progress"
@@ -66,11 +67,18 @@ func main() {
 	})
 	gradingUseCase := grading.NewUseCase(problemRepo, submissionRepo, resultRepo, progressRepo, userRepo, userIdentityProvider, jobQueue, grader)
 	problemUseCase := problem.NewUseCase(problemRepo)
+	thumbnailStorage, thumbnailStorageErr := storage.NewS3ThumbnailStorage(context.Background())
+	if thumbnailStorageErr != nil {
+		// Thumbnails are optional. Keep the grader available for existing
+		// installations, while the upload endpoint clearly reports unavailable
+		// storage until the S3 variables are configured.
+		log.Printf("problem thumbnail storage disabled: %v", thumbnailStorageErr)
+	}
 	testCaseUseCase := testcase.NewUseCase(problemRepo, testCaseRepo)
 	progressUseCase := progressuc.NewUseCase(progressRepo)
 	submissionController := controller.NewSubmissionController(gradingUseCase)
 	adminReviewController := controller.NewAdminReviewController(submissionRepo)
-	problemController := controller.NewProblemController(problemUseCase)
+	problemController := controller.NewProblemController(problemUseCase, thumbnailStorage)
 	testCaseController := controller.NewTestCaseController(testCaseUseCase)
 	progressController := controller.NewProgressController(progressUseCase)
 	leaderboardController := controller.NewLeaderboardController(leaderboardRepo)

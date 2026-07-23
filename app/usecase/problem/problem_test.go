@@ -52,8 +52,8 @@ func TestUseCaseCRUD(t *testing.T) {
 	useCase := NewUseCase(repo)
 	ctx := context.Background()
 
-	created, err := useCase.Create(ctx, CreateInput{Title: "Sum", Description: "Add two values", Author: "lecturer", Tag: models.TagMath, Difficulty: models.DifficultyEasy, TimeLimit: 2, MemoryLimit: 64})
-	if err != nil || created.ID == "" {
+	created, err := useCase.Create(ctx, CreateInput{Title: "Sum", Description: "Add two values", Author: "lecturer", Tag: models.TagMath, Difficulty: models.DifficultyEasy, TimeLimit: 2, MemoryLimit: 64, Hint: "Mulai dari variabel penampung."})
+	if err != nil || created.ID == "" || created.Hint == "" {
 		t.Fatalf("Create() = (%+v, %v), want created problem", created, err)
 	}
 
@@ -62,8 +62,8 @@ func TestUseCaseCRUD(t *testing.T) {
 		t.Fatalf("GetByID() = (%+v, %v)", got, err)
 	}
 
-	updated, err := useCase.Update(ctx, created.ID, UpdateInput{Title: "Sum v2", Description: "Add", Author: "lecturer", Tag: models.TagOperational, Difficulty: models.DifficultyMedium, TimeLimit: 3, MemoryLimit: 64})
-	if err != nil || updated.TimeLimit != 3 || updated.Title != "Sum v2" {
+	updated, err := useCase.Update(ctx, created.ID, UpdateInput{Title: "Sum v2", Description: "Add", Author: "lecturer", Tag: models.TagOperational, Difficulty: models.DifficultyMedium, TimeLimit: 3, MemoryLimit: 64, Hint: "Gunakan operator +."})
+	if err != nil || updated.TimeLimit != 3 || updated.Title != "Sum v2" || updated.Hint != "Gunakan operator +." {
 		t.Fatalf("Update() = (%+v, %v)", updated, err)
 	}
 

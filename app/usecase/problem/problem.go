@@ -17,6 +17,7 @@ const (
 	maxTitleBytes       = 256
 	maxDescriptionBytes = 64 << 10
 	maxAuthorBytes      = 256
+	maxHintBytes        = 4 << 10
 	maxTimeLimitMS      = 1_000
 	maxMemoryLimitMB    = 64
 )
@@ -29,6 +30,7 @@ type CreateInput struct {
 	Difficulty  string
 	TimeLimit   int
 	MemoryLimit int
+	Hint        string
 }
 
 type UpdateInput = CreateInput
@@ -94,6 +96,20 @@ func (uc *useCase) Delete(_ context.Context, id string) error {
 	return uc.repo.DeleteProblem(problem)
 }
 
+// SetThumbnailKey updates only the storage reference so normal problem edits do
+// not accidentally remove an already uploaded thumbnail.
+func (uc *useCase) SetThumbnailKey(_ context.Context, id, thumbnailKey string) (models.Problem, error) {
+	problem, err := uc.repo.GetProblemByID(strings.TrimSpace(id))
+	if err != nil {
+		return models.Problem{}, err
+	}
+	problem.ThumbnailKey = strings.TrimSpace(thumbnailKey)
+	if err := uc.repo.SaveProblem(problem); err != nil {
+		return models.Problem{}, err
+	}
+	return *problem, nil
+}
+
 func applyInput(problem *models.Problem, input CreateInput) error {
 	problem.Title = strings.TrimSpace(input.Title)
 	problem.Description = strings.TrimSpace(input.Description)
@@ -102,7 +118,8 @@ func applyInput(problem *models.Problem, input CreateInput) error {
 	problem.Difficulty = strings.ToLower(strings.TrimSpace(input.Difficulty))
 	problem.TimeLimit = input.TimeLimit
 	problem.MemoryLimit = input.MemoryLimit
-	if problem.Title == "" || problem.Description == "" || problem.Author == "" || len(problem.Title) > maxTitleBytes || len(problem.Description) > maxDescriptionBytes || len(problem.Author) > maxAuthorBytes || !isValidTag(problem.Tag) || !isValidDifficulty(problem.Difficulty) || problem.TimeLimit <= 0 || problem.TimeLimit > maxTimeLimitMS || problem.MemoryLimit <= 0 || problem.MemoryLimit > maxMemoryLimitMB {
+	problem.Hint = strings.TrimSpace(input.Hint)
+	if problem.Title == "" || problem.Description == "" || problem.Author == "" || len(problem.Title) > maxTitleBytes || len(problem.Description) > maxDescriptionBytes || len(problem.Author) > maxAuthorBytes || len(problem.Hint) > maxHintBytes || !isValidTag(problem.Tag) || !isValidDifficulty(problem.Difficulty) || problem.TimeLimit <= 0 || problem.TimeLimit > maxTimeLimitMS || problem.MemoryLimit <= 0 || problem.MemoryLimit > maxMemoryLimitMB {
 		return ErrInvalidInput
 	}
 	return nil
