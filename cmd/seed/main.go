@@ -22,7 +22,7 @@ func main() {
 		Tag:         models.TagOperational,
 		Difficulty:  models.DifficultyEasy,
 		TimeLimit:   1000,
-		MemoryLimit: 128,
+		MemoryLimit: 64,
 	}
 
 	if err := config.DB.Transaction(func(tx *gorm.DB) error {

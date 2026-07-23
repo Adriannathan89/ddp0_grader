@@ -17,8 +17,8 @@ const (
 	maxTitleBytes       = 256
 	maxDescriptionBytes = 64 << 10
 	maxAuthorBytes      = 256
-	maxTimeLimitMS      = 10_000
-	maxMemoryLimitMB    = 1_024
+	maxTimeLimitMS      = 1_000
+	maxMemoryLimitMB    = 64
 )
 
 type CreateInput struct {

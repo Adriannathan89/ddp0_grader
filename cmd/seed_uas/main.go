@@ -44,7 +44,7 @@ func main() {
 		Tag:         models.TagMath,
 		Difficulty:  models.DifficultyEasy,
 		TimeLimit:   1000,
-		MemoryLimit: 128,
+		MemoryLimit: 64,
 	}
 
 	tests := seedTests()

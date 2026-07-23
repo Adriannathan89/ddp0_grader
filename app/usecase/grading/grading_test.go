@@ -193,6 +193,19 @@ func TestSubmitQueuesSubmission(t *testing.T) {
 	}
 }
 
+func TestSubmitRejectsMoreThanTenTestCases(t *testing.T) {
+	testCases := make([]models.TestCase, maxTestCasesPerSubmission+1)
+	for i := range testCases {
+		testCases[i] = models.TestCase{ID: "tc"}
+	}
+	problem := models.Problem{ID: "problem-1", TestCases: testCases}
+	useCase := NewUseCase(&fakeProblemRepository{problem: problem}, &fakeSubmissionRepository{items: map[string]models.Submission{}}, &fakeResultRepository{}, &fakeProgressRepository{}, &fakeUserRepository{users: map[string]models.User{"user-1": {ID: "user-1"}}}, nil, &fakeQueue{}, &fakeGrader{})
+	_, err := useCase.Submit(context.Background(), SubmitInput{ProblemID: problem.ID, UserID: "user-1", SourceCode: "print(1)"})
+	if !errors.Is(err, ErrTooManyTestCases) {
+		t.Fatalf("Submit() error = %v, want %v", err, ErrTooManyTestCases)
+	}
+}
+
 func TestSubmitMarksQueueError(t *testing.T) {
 	problem := models.Problem{ID: "problem-1"}
 	submissions := &fakeSubmissionRepository{items: map[string]models.Submission{}}

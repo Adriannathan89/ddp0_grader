@@ -46,7 +46,7 @@ func main() {
 		log.Fatalf("seed problems failed: %v", err)
 	}
 
-	log.Printf("seeded %d problems with 30 test cases each", len(definitions))
+	log.Printf("seeded %d problems with 10 test cases each", len(definitions))
 }
 
 func loadDefinitions() ([]problemDefinition, error) {
@@ -71,16 +71,17 @@ func seedProblem(tx *gorm.DB, definition problemDefinition) error {
 	problem := models.Problem{
 		ID: id, Title: definition.Title, Description: definition.Description,
 		Author: "system", Tag: strings.ToLower(definition.Tag),
-		Difficulty: models.DifficultyEasy, TimeLimit: 1000, MemoryLimit: 128,
+		Difficulty: models.DifficultyEasy, TimeLimit: 1000, MemoryLimit: 64,
 	}
 	if err := tx.Where("id = ?", id).Assign(problem).FirstOrCreate(&problem).Error; err != nil {
 		return fmt.Errorf("save problem %s: %w", id, err)
 	}
 
 	tests := generateTestCases(definition.Title)
-	if len(tests) != 30 {
-		return fmt.Errorf("problem %q generated %d testcases, want 30", definition.Title, len(tests))
+	if len(tests) < 10 {
+		return fmt.Errorf("problem %q generated %d testcases, need at least 10", definition.Title, len(tests))
 	}
+	tests = tests[:10]
 	if err := tx.Where("problem_id = ?", id).Delete(&models.TestCase{}).Error; err != nil {
 		return fmt.Errorf("clear testcases for %s: %w", id, err)
 	}

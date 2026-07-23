@@ -65,6 +65,8 @@ type Config struct {
 	OutputLimit     int64
 	DefaultTime     time.Duration
 	DefaultMemoryMB int
+	MaxTime         time.Duration
+	MaxMemoryMB     int
 }
 
 type Runner struct{ config Config }
@@ -82,8 +84,20 @@ func New(config Config) *Runner {
 	if config.DefaultTime <= 0 {
 		config.DefaultTime = 1 * time.Second
 	}
+	if config.MaxTime <= 0 {
+		config.MaxTime = 1 * time.Second
+	}
+	if config.DefaultTime > config.MaxTime {
+		config.DefaultTime = config.MaxTime
+	}
 	if config.DefaultMemoryMB <= 0 {
-		config.DefaultMemoryMB = 256
+		config.DefaultMemoryMB = 64
+	}
+	if config.MaxMemoryMB <= 0 {
+		config.MaxMemoryMB = 64
+	}
+	if config.DefaultMemoryMB > config.MaxMemoryMB {
+		config.DefaultMemoryMB = config.MaxMemoryMB
 	}
 	return &Runner{config: config}
 }
@@ -133,9 +147,15 @@ func (r *Runner) RunTestCase(parent context.Context, source string, tc models.Te
 	if timeLimitMS > 0 {
 		limit = time.Duration(timeLimitMS) * time.Millisecond
 	}
+	if limit > r.config.MaxTime {
+		limit = r.config.MaxTime
+	}
 	memory := r.config.DefaultMemoryMB
 	if memoryLimitMB > 0 {
 		memory = memoryLimitMB
+	}
+	if memory > r.config.MaxMemoryMB {
+		memory = r.config.MaxMemoryMB
 	}
 	// Docker startup is outside the contestant's time budget. Keep a generous
 	// outer guard only to prevent a stuck Docker command from hanging forever;

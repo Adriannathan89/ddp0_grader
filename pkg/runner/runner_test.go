@@ -50,3 +50,13 @@ func TestRunReturnsErrorWhenRunnerCannotExecuteAnyTestCase(t *testing.T) {
 		t.Fatal("expected an infrastructure error when docker cannot be started")
 	}
 }
+
+func TestNewCapsRunnerLimits(t *testing.T) {
+	r := New(Config{DefaultTime: 3 * time.Second, MaxTime: time.Second, DefaultMemoryMB: 128, MaxMemoryMB: 64})
+	if r.config.DefaultTime != time.Second || r.config.MaxTime != time.Second {
+		t.Fatalf("unexpected time limits: default=%s max=%s", r.config.DefaultTime, r.config.MaxTime)
+	}
+	if r.config.DefaultMemoryMB != 64 || r.config.MaxMemoryMB != 64 {
+		t.Fatalf("unexpected memory limits: default=%d max=%d", r.config.DefaultMemoryMB, r.config.MaxMemoryMB)
+	}
+}

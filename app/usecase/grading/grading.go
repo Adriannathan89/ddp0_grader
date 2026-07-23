@@ -22,7 +22,7 @@ type SubmitInput struct {
 }
 
 const (
-	maxTestCasesPerSubmission = 100
+	maxTestCasesPerSubmission = 10
 	maxFeedbackBytes          = 4 << 10
 )
 

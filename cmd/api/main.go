@@ -59,8 +59,10 @@ func main() {
 	grader := runner.New(runner.Config{
 		Image:           "python:3.12-slim",
 		OutputLimit:     64 << 10,
-		DefaultTime:     2 * time.Second,
+		DefaultTime:     time.Second,
 		DefaultMemoryMB: 64,
+		MaxTime:         time.Second,
+		MaxMemoryMB:     64,
 	})
 	gradingUseCase := grading.NewUseCase(problemRepo, submissionRepo, resultRepo, progressRepo, userRepo, userIdentityProvider, jobQueue, grader)
 	problemUseCase := problem.NewUseCase(problemRepo)
