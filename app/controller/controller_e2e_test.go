@@ -4,11 +4,13 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"ddp0_grader/app/config"
 	"ddp0_grader/app/controller"
@@ -110,6 +112,21 @@ func (f *gradingFake) GetSubmission(_ context.Context, id string) (models.Submis
 }
 func (f *gradingFake) GradeJob(context.Context, queue.Job) error                { return nil }
 func (f *gradingFake) MarkJobExhausted(context.Context, queue.Job, error) error { return nil }
+
+type gradeRateLimiterFake struct {
+	allowed    bool
+	retryAfter time.Duration
+	err        error
+	calls      int
+}
+
+func (f *gradeRateLimiterFake) Allow(_ context.Context, userID string) (bool, time.Duration, error) {
+	f.calls++
+	if userID != "user-1" {
+		return false, 0, errors.New("unexpected user")
+	}
+	return f.allowed, f.retryAfter, f.err
+}
 
 type progressFake struct {
 	progress models.Progress
@@ -255,5 +272,27 @@ func TestRoutesReturnExpectedClientErrors(t *testing.T) {
 	_ = writer.Close()
 	if response := request(router, http.MethodPost, "/api/submissions/grade", writer.FormDataContentType(), body); response.Code != http.StatusBadRequest {
 		t.Fatalf("submission with non-python file status = %d, want 400", response.Code)
+	}
+}
+
+func TestSubmissionGradeRateLimit(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	router := gin.New()
+	router.Use(func(c *gin.Context) {
+		c.Set(config.AuthUserIDContextKey, "user-1")
+		c.Next()
+	})
+	limiter := &gradeRateLimiterFake{allowed: false, retryAfter: 9*time.Second + time.Millisecond}
+	controller.NewSubmissionController(&gradingFake{}, limiter).RegisterRoutes(router)
+
+	response := request(router, http.MethodPost, "/submissions/grade", "", nil)
+	if response.Code != http.StatusTooManyRequests {
+		t.Fatalf("POST /submissions/grade status = %d, want 429", response.Code)
+	}
+	if got := response.Header().Get("Retry-After"); got != "10" {
+		t.Fatalf("Retry-After = %q, want 10", got)
+	}
+	if limiter.calls != 1 {
+		t.Fatalf("rate limiter calls = %d, want 1", limiter.calls)
 	}
 }

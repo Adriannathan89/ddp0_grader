@@ -76,7 +76,7 @@ func main() {
 	}
 	testCaseUseCase := testcase.NewUseCase(problemRepo, testCaseRepo)
 	progressUseCase := progressuc.NewUseCase(progressRepo)
-	submissionController := controller.NewSubmissionController(gradingUseCase)
+	submissionController := controller.NewSubmissionController(gradingUseCase, controller.NewRedisGradeRateLimiter(config.RedisClient))
 	adminReviewController := controller.NewAdminReviewController(submissionRepo)
 	problemController := controller.NewProblemController(problemUseCase, thumbnailStorage)
 	testCaseController := controller.NewTestCaseController(testCaseUseCase)

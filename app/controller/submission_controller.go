@@ -5,7 +5,9 @@ import (
 	"io"
 	"net/http"
 	"path/filepath"
+	"strconv"
 	"strings"
+	"time"
 
 	"ddp0_grader/app/config"
 	"ddp0_grader/app/usecase/grading"
@@ -17,19 +19,51 @@ import (
 const maxSourceSize = 1 << 20
 
 type SubmissionController struct {
-	grading grading.UseCase
+	grading      grading.UseCase
+	gradeLimiter GradeRateLimiter
 }
 
-func NewSubmissionController(grading grading.UseCase) *SubmissionController {
-	return &SubmissionController{grading: grading}
+func NewSubmissionController(grading grading.UseCase, limiters ...GradeRateLimiter) *SubmissionController {
+	controller := &SubmissionController{grading: grading}
+	if len(limiters) > 0 {
+		controller.gradeLimiter = limiters[0]
+	}
+	return controller
 }
 
 func (controller *SubmissionController) RegisterRoutes(router gin.IRouter) {
 	submission := router.Group("/submissions")
 	{
-		submission.POST("/grade", controller.grade)
+		submission.POST("/grade", controller.limitGrade, controller.grade)
 		submission.GET("/:id", controller.getByID)
 	}
+}
+
+func (controller *SubmissionController) limitGrade(c *gin.Context) {
+	if controller.gradeLimiter == nil {
+		return
+	}
+	userID, ok := config.AuthenticatedUserID(c)
+	if !ok {
+		return
+	}
+	allowed, retryAfter, err := controller.gradeLimiter.Allow(c.Request.Context(), userID)
+	if err != nil {
+		c.AbortWithStatusJSON(http.StatusServiceUnavailable, gin.H{"error": "grade rate limiter unavailable"})
+		return
+	}
+	if allowed {
+		return
+	}
+	retrySeconds := int(retryAfter / time.Second)
+	if retryAfter%time.Second != 0 {
+		retrySeconds++
+	}
+	if retrySeconds < 1 {
+		retrySeconds = 1
+	}
+	c.Header("Retry-After", strconv.Itoa(retrySeconds))
+	c.AbortWithStatusJSON(http.StatusTooManyRequests, gin.H{"error": "grade request rate limit exceeded"})
 }
 
 func (controller *SubmissionController) getByID(c *gin.Context) {
