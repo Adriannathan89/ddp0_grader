@@ -9,7 +9,7 @@ import (
 type ProblemRepository interface {
 	GetProblemByID(id string) (*models.Problem, error)
 	GetProblemByIDWithPreloaded(id string) (*models.Problem, error)
-	GetAllProblems() ([]models.Problem, error)
+	GetAllProblems(isQuiz *bool) ([]models.Problem, error)
 	SaveProblem(problem *models.Problem) error
 	DeleteProblem(problem *models.Problem) error
 }
@@ -38,9 +38,13 @@ func (r *problemRepository) GetProblemByID(id string) (*models.Problem, error) {
 	return &problem, nil
 }
 
-func (r *problemRepository) GetAllProblems() ([]models.Problem, error) {
+func (r *problemRepository) GetAllProblems(isQuiz *bool) ([]models.Problem, error) {
 	var problems []models.Problem
-	if err := r.db.Find(&problems).Error; err != nil {
+	query := r.db
+	if isQuiz != nil {
+		query = query.Where("is_quiz = ?", *isQuiz)
+	}
+	if err := query.Order("created_at DESC").Find(&problems).Error; err != nil {
 		return nil, err
 	}
 	return problems, nil

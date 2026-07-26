@@ -5,6 +5,7 @@ import (
 	"errors"
 	"log"
 	"net/http"
+	"strconv"
 
 	"ddp0_grader/app/models"
 	"ddp0_grader/app/storage"
@@ -25,6 +26,7 @@ type problemRequest struct {
 	TimeLimit   int    `json:"time_limit"`
 	MemoryLimit int    `json:"memory_limit"`
 	Hint        string `json:"hint"`
+	IsQuiz      bool   `json:"is_quiz"`
 }
 
 type thumbnailUpdater interface {
@@ -82,7 +84,11 @@ func (controller *ProblemController) create(c *gin.Context) {
 }
 
 func (controller *ProblemController) getAll(c *gin.Context) {
-	problems, err := controller.useCase.GetAll(c.Request.Context())
+	isQuiz, ok := parseIsQuizFilter(c)
+	if !ok {
+		return
+	}
+	problems, err := controller.useCase.GetAll(c.Request.Context(), isQuiz)
 	if err != nil {
 		writeProblemError(c, err)
 		return
@@ -219,7 +225,20 @@ func bindProblemRequest(c *gin.Context) (problemRequest, bool) {
 }
 
 func (request problemRequest) toInput() problem.CreateInput {
-	return problem.CreateInput{Title: request.Title, Description: request.Description, Author: request.Author, Tag: request.Tag, Difficulty: request.Difficulty, TimeLimit: request.TimeLimit, MemoryLimit: request.MemoryLimit, Hint: request.Hint}
+	return problem.CreateInput{Title: request.Title, Description: request.Description, Author: request.Author, Tag: request.Tag, Difficulty: request.Difficulty, TimeLimit: request.TimeLimit, MemoryLimit: request.MemoryLimit, Hint: request.Hint, IsQuiz: request.IsQuiz}
+}
+
+func parseIsQuizFilter(c *gin.Context) (*bool, bool) {
+	rawValue, exists := c.GetQuery("is_quiz")
+	if !exists {
+		return nil, true
+	}
+	value, err := strconv.ParseBool(rawValue)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "is_quiz must be a boolean"})
+		return nil, false
+	}
+	return &value, true
 }
 
 func (controller *ProblemController) response(c *gin.Context, item models.Problem) models.Problem {

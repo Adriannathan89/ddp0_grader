@@ -21,9 +21,9 @@ func (r *fakeProblemRepository) GetProblemByID(id string) (*models.Problem, erro
 func (r *fakeProblemRepository) GetProblemByIDWithPreloaded(id string) (*models.Problem, error) {
 	return r.GetProblemByID(id)
 }
-func (r *fakeProblemRepository) GetAllProblems() ([]models.Problem, error) { return nil, nil }
-func (r *fakeProblemRepository) SaveProblem(*models.Problem) error         { return nil }
-func (r *fakeProblemRepository) DeleteProblem(*models.Problem) error       { return nil }
+func (r *fakeProblemRepository) GetAllProblems(*bool) ([]models.Problem, error) { return nil, nil }
+func (r *fakeProblemRepository) SaveProblem(*models.Problem) error              { return nil }
+func (r *fakeProblemRepository) DeleteProblem(*models.Problem) error            { return nil }
 
 type fakeTestCaseRepository struct{ items map[string]models.TestCase }
 

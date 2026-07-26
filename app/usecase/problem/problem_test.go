@@ -29,9 +29,12 @@ func (r *fakeRepository) GetProblemByIDWithPreloaded(id string) (*models.Problem
 	return r.GetProblemByID(id)
 }
 
-func (r *fakeRepository) GetAllProblems() ([]models.Problem, error) {
+func (r *fakeRepository) GetAllProblems(isQuiz *bool) ([]models.Problem, error) {
 	problems := make([]models.Problem, 0, len(r.items))
 	for _, problem := range r.items {
+		if isQuiz != nil && problem.IsQuiz != *isQuiz {
+			continue
+		}
 		problems = append(problems, problem)
 	}
 	return problems, nil
@@ -62,15 +65,15 @@ func TestUseCaseCRUD(t *testing.T) {
 		t.Fatalf("GetByID() = (%+v, %v)", got, err)
 	}
 
-	updated, err := useCase.Update(ctx, created.ID, UpdateInput{Title: "Sum v2", Description: "Add", Author: "lecturer", Tag: "Data Structure", Difficulty: models.DifficultyMedium, TimeLimit: 3, MemoryLimit: 64, Hint: "Gunakan operator +."})
-	if err != nil || updated.TimeLimit != 3 || updated.Title != "Sum v2" || updated.Hint != "Gunakan operator +." {
+	updated, err := useCase.Update(ctx, created.ID, UpdateInput{Title: "Sum v2", Description: "Add", Author: "lecturer", Tag: "Data Structure", Difficulty: models.DifficultyMedium, TimeLimit: 3, MemoryLimit: 64, Hint: "Gunakan operator +.", IsQuiz: true})
+	if err != nil || updated.TimeLimit != 3 || updated.Title != "Sum v2" || updated.Hint != "Gunakan operator +." || !updated.IsQuiz {
 		t.Fatalf("Update() = (%+v, %v)", updated, err)
 	}
 	if updated.Tag != models.TagDataStructure {
 		t.Fatalf("updated tag = %q, want %q", updated.Tag, models.TagDataStructure)
 	}
 
-	all, err := useCase.GetAll(ctx)
+	all, err := useCase.GetAll(ctx, nil)
 	if err != nil || len(all) != 1 {
 		t.Fatalf("GetAll() = (%d items, %v), want one item", len(all), err)
 	}
@@ -80,6 +83,31 @@ func TestUseCaseCRUD(t *testing.T) {
 	}
 	if _, err := useCase.GetByID(ctx, created.ID); err != gorm.ErrRecordNotFound {
 		t.Fatalf("GetByID() after delete error = %v, want record not found", err)
+	}
+}
+
+func TestUseCaseFiltersProblemsByQuizFlag(t *testing.T) {
+	repo := newFakeRepository()
+	useCase := NewUseCase(repo)
+	ctx := context.Background()
+
+	if _, err := useCase.Create(ctx, CreateInput{Title: "Gym", Description: "Practice", Author: "lecturer", Tag: models.TagMath, Difficulty: models.DifficultyEasy, TimeLimit: 1, MemoryLimit: 1}); err != nil {
+		t.Fatalf("create gym problem: %v", err)
+	}
+	if _, err := useCase.Create(ctx, CreateInput{Title: "Quiz", Description: "Assessment", Author: "lecturer", Tag: models.TagMath, Difficulty: models.DifficultyEasy, TimeLimit: 1, MemoryLimit: 1, IsQuiz: true}); err != nil {
+		t.Fatalf("create quiz problem: %v", err)
+	}
+
+	isQuiz := true
+	quizProblems, err := useCase.GetAll(ctx, &isQuiz)
+	if err != nil || len(quizProblems) != 1 || !quizProblems[0].IsQuiz {
+		t.Fatalf("GetAll(true) = (%+v, %v), want only quiz problem", quizProblems, err)
+	}
+
+	isQuiz = false
+	gymProblems, err := useCase.GetAll(ctx, &isQuiz)
+	if err != nil || len(gymProblems) != 1 || gymProblems[0].IsQuiz {
+		t.Fatalf("GetAll(false) = (%+v, %v), want only gym problem", gymProblems, err)
 	}
 }
 

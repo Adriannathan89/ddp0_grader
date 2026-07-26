@@ -31,13 +31,14 @@ type CreateInput struct {
 	TimeLimit   int
 	MemoryLimit int
 	Hint        string
+	IsQuiz      bool
 }
 
 type UpdateInput = CreateInput
 
 type UseCase interface {
 	Create(ctx context.Context, input CreateInput) (models.Problem, error)
-	GetAll(ctx context.Context) ([]models.Problem, error)
+	GetAll(ctx context.Context, isQuiz *bool) ([]models.Problem, error)
 	GetByID(ctx context.Context, id string) (models.Problem, error)
 	Update(ctx context.Context, id string, input UpdateInput) (models.Problem, error)
 	Delete(ctx context.Context, id string) error
@@ -62,8 +63,8 @@ func (uc *useCase) Create(_ context.Context, input CreateInput) (models.Problem,
 	return problem, nil
 }
 
-func (uc *useCase) GetAll(_ context.Context) ([]models.Problem, error) {
-	return uc.repo.GetAllProblems()
+func (uc *useCase) GetAll(_ context.Context, isQuiz *bool) ([]models.Problem, error) {
+	return uc.repo.GetAllProblems(isQuiz)
 }
 
 func (uc *useCase) GetByID(_ context.Context, id string) (models.Problem, error) {
@@ -119,6 +120,7 @@ func applyInput(problem *models.Problem, input CreateInput) error {
 	problem.TimeLimit = input.TimeLimit
 	problem.MemoryLimit = input.MemoryLimit
 	problem.Hint = strings.TrimSpace(input.Hint)
+	problem.IsQuiz = input.IsQuiz
 	if problem.Title == "" || problem.Description == "" || problem.Author == "" || len(problem.Title) > maxTitleBytes || len(problem.Description) > maxDescriptionBytes || len(problem.Author) > maxAuthorBytes || len(problem.Hint) > maxHintBytes || !isValidTag(problem.Tag) || !isValidDifficulty(problem.Difficulty) || problem.TimeLimit <= 0 || problem.TimeLimit > maxTimeLimitMS || problem.MemoryLimit <= 0 || problem.MemoryLimit > maxMemoryLimitMB {
 		return ErrInvalidInput
 	}

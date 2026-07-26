@@ -27,10 +27,13 @@ import (
 type problemFake struct{ item models.Problem }
 
 func (f *problemFake) Create(_ context.Context, input problemuc.CreateInput) (models.Problem, error) {
-	f.item = models.Problem{ID: "problem-1", Title: input.Title, Description: input.Description, Author: input.Author, Tag: input.Tag, Difficulty: input.Difficulty, TimeLimit: input.TimeLimit, MemoryLimit: input.MemoryLimit, Hint: input.Hint}
+	f.item = models.Problem{ID: "problem-1", Title: input.Title, Description: input.Description, Author: input.Author, Tag: input.Tag, Difficulty: input.Difficulty, TimeLimit: input.TimeLimit, MemoryLimit: input.MemoryLimit, Hint: input.Hint, IsQuiz: input.IsQuiz}
 	return f.item, nil
 }
-func (f *problemFake) GetAll(context.Context) ([]models.Problem, error) {
+func (f *problemFake) GetAll(_ context.Context, isQuiz *bool) ([]models.Problem, error) {
+	if isQuiz != nil && f.item.IsQuiz != *isQuiz {
+		return []models.Problem{}, nil
+	}
 	return []models.Problem{f.item}, nil
 }
 func (f *problemFake) GetByID(_ context.Context, id string) (models.Problem, error) {
@@ -45,7 +48,7 @@ func (f *problemFake) Update(_ context.Context, id string, input problemuc.Updat
 	}
 	f.item.Title, f.item.Description, f.item.Author = input.Title, input.Description, input.Author
 	f.item.Tag, f.item.Difficulty = input.Tag, input.Difficulty
-	f.item.TimeLimit, f.item.MemoryLimit, f.item.Hint = input.TimeLimit, input.MemoryLimit, input.Hint
+	f.item.TimeLimit, f.item.MemoryLimit, f.item.Hint, f.item.IsQuiz = input.TimeLimit, input.MemoryLimit, input.Hint, input.IsQuiz
 	return f.item, nil
 }
 func (f *problemFake) Delete(_ context.Context, id string) error {
@@ -181,17 +184,20 @@ func TestRoutesE2E(t *testing.T) {
 		t.Fatalf("GET /api/health status = %d, want 200", response.Code)
 	}
 
-	problemBody := `{"title":"Sum","description":"Add two integers","created_by":"lecturer","tag":"math","difficulty":"easy","time_limit":2,"memory_limit":256,"hint":"Tambahkan dua nilai."}`
+	problemBody := `{"title":"Sum","description":"Add two integers","created_by":"lecturer","tag":"math","difficulty":"easy","time_limit":2,"memory_limit":256,"hint":"Tambahkan dua nilai.","is_quiz":true}`
 	if response := request(router, http.MethodPost, "/api/problems", "application/json", bytes.NewBufferString(problemBody)); response.Code != http.StatusCreated {
 		t.Fatalf("POST /api/problems status = %d, body = %s", response.Code, response.Body.String())
 	}
 	if response := request(router, http.MethodGet, "/api/problems", "", nil); response.Code != http.StatusOK {
 		t.Fatalf("GET /api/problems status = %d", response.Code)
 	}
+	if response := request(router, http.MethodGet, "/api/problems?is_quiz=false", "", nil); response.Code != http.StatusOK || response.Body.String() != "[]" {
+		t.Fatalf("GET /api/problems?is_quiz=false = %d, body = %s", response.Code, response.Body.String())
+	}
 	if response := request(router, http.MethodGet, "/api/problems/problem-1", "", nil); response.Code != http.StatusOK {
 		t.Fatalf("GET /api/problems/:id status = %d", response.Code)
 	}
-	updatedProblem := `{"title":"Sum v2","description":"Add values","created_by":"lecturer","tag":"sorting","difficulty":"medium","time_limit":3,"memory_limit":512}`
+	updatedProblem := `{"title":"Sum v2","description":"Add values","created_by":"lecturer","tag":"sorting","difficulty":"medium","time_limit":3,"memory_limit":512,"is_quiz":false}`
 	if response := request(router, http.MethodPatch, "/api/problems/problem-1", "application/json", bytes.NewBufferString(updatedProblem)); response.Code != http.StatusOK {
 		t.Fatalf("PATCH /api/problems/:id status = %d, body = %s", response.Code, response.Body.String())
 	}
