@@ -114,7 +114,7 @@ func applyInput(problem *models.Problem, input CreateInput) error {
 	problem.Title = strings.TrimSpace(input.Title)
 	problem.Description = strings.TrimSpace(input.Description)
 	problem.Author = strings.TrimSpace(input.Author)
-	problem.Tag = strings.ToLower(strings.TrimSpace(input.Tag))
+	problem.Tag = normalizeTag(input.Tag)
 	problem.Difficulty = strings.ToLower(strings.TrimSpace(input.Difficulty))
 	problem.TimeLimit = input.TimeLimit
 	problem.MemoryLimit = input.MemoryLimit
@@ -127,10 +127,22 @@ func applyInput(problem *models.Problem, input CreateInput) error {
 
 func isValidTag(tag string) bool {
 	switch tag {
-	case models.TagMath, models.TagVariable, models.TagOperational, models.TagConditional, models.TagLoop, models.TagFunction:
+	case models.TagMath, models.TagSorting, models.TagDataStructure, models.TagBruteforce, models.TagImplementation:
 		return true
 	default:
 		return false
+	}
+}
+
+func normalizeTag(value string) string {
+	tag := strings.ToLower(strings.TrimSpace(value))
+	switch tag {
+	case "data structure":
+		return models.TagDataStructure
+	case "brute force":
+		return models.TagBruteforce
+	default:
+		return tag
 	}
 }
 

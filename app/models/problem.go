@@ -3,12 +3,11 @@ package models
 import "time"
 
 const (
-	TagMath        = "math"
-	TagVariable    = "variable"
-	TagOperational = "operational"
-	TagConditional = "conditional"
-	TagLoop        = "loop"
-	TagFunction    = "function"
+	TagMath           = "math"
+	TagSorting        = "sorting"
+	TagDataStructure  = "data_structure"
+	TagBruteforce     = "bruteforce"
+	TagImplementation = "implementation"
 )
 
 const (

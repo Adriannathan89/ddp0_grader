@@ -62,9 +62,12 @@ func TestUseCaseCRUD(t *testing.T) {
 		t.Fatalf("GetByID() = (%+v, %v)", got, err)
 	}
 
-	updated, err := useCase.Update(ctx, created.ID, UpdateInput{Title: "Sum v2", Description: "Add", Author: "lecturer", Tag: models.TagOperational, Difficulty: models.DifficultyMedium, TimeLimit: 3, MemoryLimit: 64, Hint: "Gunakan operator +."})
+	updated, err := useCase.Update(ctx, created.ID, UpdateInput{Title: "Sum v2", Description: "Add", Author: "lecturer", Tag: "Data Structure", Difficulty: models.DifficultyMedium, TimeLimit: 3, MemoryLimit: 64, Hint: "Gunakan operator +."})
 	if err != nil || updated.TimeLimit != 3 || updated.Title != "Sum v2" || updated.Hint != "Gunakan operator +." {
 		t.Fatalf("Update() = (%+v, %v)", updated, err)
+	}
+	if updated.Tag != models.TagDataStructure {
+		t.Fatalf("updated tag = %q, want %q", updated.Tag, models.TagDataStructure)
 	}
 
 	all, err := useCase.GetAll(ctx)

@@ -191,7 +191,7 @@ func TestRoutesE2E(t *testing.T) {
 	if response := request(router, http.MethodGet, "/api/problems/problem-1", "", nil); response.Code != http.StatusOK {
 		t.Fatalf("GET /api/problems/:id status = %d", response.Code)
 	}
-	updatedProblem := `{"title":"Sum v2","description":"Add values","created_by":"lecturer","tag":"operational","difficulty":"medium","time_limit":3,"memory_limit":512}`
+	updatedProblem := `{"title":"Sum v2","description":"Add values","created_by":"lecturer","tag":"sorting","difficulty":"medium","time_limit":3,"memory_limit":512}`
 	if response := request(router, http.MethodPatch, "/api/problems/problem-1", "application/json", bytes.NewBufferString(updatedProblem)); response.Code != http.StatusOK {
 		t.Fatalf("PATCH /api/problems/:id status = %d, body = %s", response.Code, response.Body.String())
 	}

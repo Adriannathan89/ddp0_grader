@@ -19,7 +19,7 @@ func main() {
 		Title:       "Hello World",
 		Description: "Print exactly: Hello, World!",
 		Author:      "system",
-		Tag:         models.TagOperational,
+		Tag:         models.TagImplementation,
 		Difficulty:  models.DifficultyEasy,
 		TimeLimit:   1000,
 		MemoryLimit: 64,

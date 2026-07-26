@@ -10,7 +10,7 @@ import (
 
 const (
 	gradeRequestLimit  = 5
-	gradeRequestWindow = 10 * time.Second
+	gradeRequestWindow = 30 * time.Second
 )
 
 // GradeRateLimiter limits grade requests for one authenticated user.
