@@ -37,6 +37,10 @@ func (controller *SubmissionController) RegisterRoutes(router gin.IRouter) {
 		submission.POST("/grade", controller.limitGrade, controller.grade)
 		submission.GET("/:id", controller.getByID)
 	}
+	// Quiz submissions originate from the backend's Celery worker and are
+	// idempotent. Do not rate-limit them: a 429 would only delay recovery from
+	// a response that was lost after the grader already accepted the job.
+	router.POST("/quiz/submissions/grade", controller.gradeQuiz)
 }
 
 func (controller *SubmissionController) limitGrade(c *gin.Context) {
@@ -95,6 +99,19 @@ func (controller *SubmissionController) getByID(c *gin.Context) {
 }
 
 func (controller *SubmissionController) grade(c *gin.Context) {
+	controller.gradeSubmission(c, "")
+}
+
+func (controller *SubmissionController) gradeQuiz(c *gin.Context) {
+	idempotencyKey := strings.TrimSpace(c.GetHeader("Idempotency-Key"))
+	if idempotencyKey == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Idempotency-Key header is required"})
+		return
+	}
+	controller.gradeSubmission(c, idempotencyKey)
+}
+
+func (controller *SubmissionController) gradeSubmission(c *gin.Context, idempotencyKey string) {
 	problemID := strings.TrimSpace(c.PostForm("problem_id"))
 	userID, ok := config.AuthenticatedUserID(c)
 	accessToken, hasAccessToken := config.AuthenticatedAccessToken(c)
@@ -142,10 +159,11 @@ func (controller *SubmissionController) grade(c *gin.Context) {
 	}
 
 	submission, err := controller.grading.Submit(c.Request.Context(), grading.SubmitInput{
-		ProblemID:   problemID,
-		UserID:      userID,
-		AccessToken: accessToken,
-		SourceCode:  string(source),
+		ProblemID:      problemID,
+		UserID:         userID,
+		AccessToken:    accessToken,
+		SourceCode:     string(source),
+		IdempotencyKey: idempotencyKey,
 	})
 	if err != nil {
 		status := http.StatusInternalServerError
@@ -153,6 +171,8 @@ func (controller *SubmissionController) grade(c *gin.Context) {
 			status = http.StatusNotFound
 		} else if errors.Is(err, grading.ErrTooManyTestCases) {
 			status = http.StatusBadRequest
+		} else if errors.Is(err, grading.ErrIdempotencyKeyConflict) {
+			status = http.StatusConflict
 		}
 		c.JSON(status, gin.H{"error": err.Error()})
 		return

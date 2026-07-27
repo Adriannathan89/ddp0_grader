@@ -14,6 +14,7 @@ const (
 type Submission struct {
 	ID              string           `gorm:"primaryKey" json:"id"`
 	ProgressID      string           `gorm:"not null; foreignKey:ProgressID" json:"progress_id"`
+	IdempotencyKey  *string          `gorm:"uniqueIndex" json:"-"`
 	Status          string           `gorm:"default:'queued'" json:"status"`
 	SourceCode      string           `gorm:"not null" json:"source_code"`
 	Score           int              `gorm:"not null" json:"score"`

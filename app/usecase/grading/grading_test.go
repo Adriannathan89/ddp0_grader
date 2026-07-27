@@ -44,6 +44,14 @@ func (r *fakeSubmissionRepository) GetSubmissionByIDWithPreloaded(id string) (*m
 	}
 	return &submission, nil
 }
+func (r *fakeSubmissionRepository) GetSubmissionByIdempotencyKey(key string) (*models.Submission, error) {
+	for _, submission := range r.items {
+		if submission.IdempotencyKey != nil && *submission.IdempotencyKey == key {
+			return &submission, nil
+		}
+	}
+	return nil, gorm.ErrRecordNotFound
+}
 func (r *fakeSubmissionRepository) SaveSubmission(submission *models.Submission) error {
 	r.last = *submission
 	r.items[submission.ID] = *submission
@@ -190,6 +198,30 @@ func TestSubmitQueuesSubmission(t *testing.T) {
 	}
 	if submission.ID == "" || submission.ProgressID == "" || submission.Status != models.SubmissionStatusQueued || jobQueue.job.ID != submission.ID || progresses.progress == nil {
 		t.Fatalf("Submit() submission = %+v, queued job = %+v", submission, jobQueue.job)
+	}
+}
+
+func TestSubmitWithIdempotencyKeyReturnsOriginalSubmission(t *testing.T) {
+	problem := models.Problem{ID: "problem-1", TestCases: []models.TestCase{{ID: "tc-1", ProblemID: "problem-1"}}}
+	submissions := &fakeSubmissionRepository{items: map[string]models.Submission{}}
+	jobQueue := &fakeQueue{}
+	progresses := &fakeProgressRepository{}
+	users := &fakeUserRepository{users: map[string]models.User{"user-1": {ID: "user-1"}}}
+	useCase := NewUseCase(&fakeProblemRepository{problem: problem}, submissions, &fakeResultRepository{}, progresses, users, nil, jobQueue, &fakeGrader{})
+
+	first, err := useCase.Submit(context.Background(), SubmitInput{ProblemID: "problem-1", UserID: "user-1", SourceCode: "print(1)", IdempotencyKey: "quiz-answer-1"})
+	if err != nil {
+		t.Fatalf("first Submit() error = %v", err)
+	}
+	stored := submissions.items[first.ID]
+	stored.Progress = models.Progress{ID: stored.ProgressID, UserID: "user-1"}
+	submissions.items[first.ID] = stored
+	second, err := useCase.Submit(context.Background(), SubmitInput{ProblemID: "problem-1", UserID: "user-1", SourceCode: "print(2)", IdempotencyKey: "quiz-answer-1"})
+	if err != nil {
+		t.Fatalf("second Submit() error = %v", err)
+	}
+	if second.ID != first.ID || len(submissions.items) != 1 || jobQueue.job.ID != first.ID {
+		t.Fatalf("idempotent result = %+v, submissions = %+v, job = %+v", second, submissions.items, jobQueue.job)
 	}
 }
 

@@ -301,4 +301,50 @@ func TestSubmissionGradeRateLimit(t *testing.T) {
 	if limiter.calls != 1 {
 		t.Fatalf("rate limiter calls = %d, want 1", limiter.calls)
 	}
+
+	// The Celery-only quiz endpoint is idempotent and must not be delayed by
+	// the public submission rate limiter.
+	response = request(router, http.MethodPost, "/quiz/submissions/grade", "", nil)
+	if response.Code != http.StatusBadRequest {
+		t.Fatalf("POST /quiz/submissions/grade status = %d, want 400", response.Code)
+	}
+	if limiter.calls != 1 {
+		t.Fatalf("quiz endpoint invoked rate limiter %d times, want 1", limiter.calls)
+	}
+}
+
+func TestQuizSubmissionRequiresIdempotencyKey(t *testing.T) {
+	router := newRouter()
+	body := &bytes.Buffer{}
+	writer := multipart.NewWriter(body)
+	_ = writer.WriteField("problem_id", "problem-1")
+	part, err := writer.CreateFormFile("file", "solution.py")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, _ = part.Write([]byte("print(3)"))
+	_ = writer.Close()
+
+	response := request(router, http.MethodPost, "/api/quiz/submissions/grade", writer.FormDataContentType(), body)
+	if response.Code != http.StatusBadRequest {
+		t.Fatalf("POST quiz grade without idempotency key status = %d, body = %s", response.Code, response.Body.String())
+	}
+
+	body = &bytes.Buffer{}
+	writer = multipart.NewWriter(body)
+	_ = writer.WriteField("problem_id", "problem-1")
+	part, err = writer.CreateFormFile("file", "solution.py")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, _ = part.Write([]byte("print(3)"))
+	_ = writer.Close()
+	req := httptest.NewRequest(http.MethodPost, "/api/quiz/submissions/grade", body)
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+	req.Header.Set("Idempotency-Key", "quiz-answer-1")
+	response = httptest.NewRecorder()
+	router.ServeHTTP(response, req)
+	if response.Code != http.StatusAccepted {
+		t.Fatalf("POST quiz grade with idempotency key status = %d, body = %s", response.Code, response.Body.String())
+	}
 }

@@ -12,9 +12,18 @@ import (
 type SubmissionRepository interface {
 	GetSubmissionByID(id string) (*models.Submission, error)
 	GetSubmissionByIDWithPreloaded(id string) (*models.Submission, error)
+	GetSubmissionByIdempotencyKey(key string) (*models.Submission, error)
 	SaveSubmission(submission *models.Submission) error
 	DeleteSubmission(submission *models.Submission) error
 	GetAdminSubmissions(filter AdminSubmissionFilter) ([]AdminSubmission, int64, error)
+}
+
+func (r *submissionRepository) GetSubmissionByIdempotencyKey(key string) (*models.Submission, error) {
+	var submission models.Submission
+	if err := r.db.Preload("Progress").First(&submission, "idempotency_key = ?", key).Error; err != nil {
+		return nil, err
+	}
+	return &submission, nil
 }
 
 type AdminSubmissionFilter struct {

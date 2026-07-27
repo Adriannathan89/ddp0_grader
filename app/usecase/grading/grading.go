@@ -15,10 +15,11 @@ import (
 )
 
 type SubmitInput struct {
-	ProblemID   string
-	UserID      string
-	AccessToken string
-	SourceCode  string
+	ProblemID      string
+	UserID         string
+	AccessToken    string
+	SourceCode     string
+	IdempotencyKey string
 }
 
 const (
@@ -26,7 +27,10 @@ const (
 	maxFeedbackBytes          = 4 << 10
 )
 
-var ErrTooManyTestCases = errors.New("problem has too many testcases to grade")
+var (
+	ErrTooManyTestCases       = errors.New("problem has too many testcases to grade")
+	ErrIdempotencyKeyConflict = errors.New("idempotency key belongs to a different user")
+)
 
 type UseCase interface {
 	Submit(ctx context.Context, input SubmitInput) (models.Submission, error)
@@ -83,6 +87,22 @@ func NewUseCase(
 }
 
 func (uc *useCase) Submit(ctx context.Context, input SubmitInput) (models.Submission, error) {
+	// Return a prior quiz submission before doing any further work. This is the
+	// critical recovery path when the grader accepted a request but the caller
+	// timed out before receiving its response.
+	if input.IdempotencyKey != "" {
+		existing, err := uc.submissionRepo.GetSubmissionByIdempotencyKey(input.IdempotencyKey)
+		if err == nil {
+			if existing.Progress.UserID != input.UserID {
+				return models.Submission{}, ErrIdempotencyKeyConflict
+			}
+			return *existing, nil
+		}
+		if !errors.Is(err, gorm.ErrRecordNotFound) {
+			return models.Submission{}, err
+		}
+	}
+
 	problem, err := uc.problemRepo.GetProblemByIDWithPreloaded(input.ProblemID)
 	if err != nil {
 		return models.Submission{}, err
@@ -116,7 +136,21 @@ func (uc *useCase) Submit(ctx context.Context, input SubmitInput) (models.Submis
 		SourceCode: input.SourceCode,
 		Status:     models.SubmissionStatusQueued,
 	}
+	if input.IdempotencyKey != "" {
+		key := input.IdempotencyKey
+		submission.IdempotencyKey = &key
+	}
 	if err := uc.submissionRepo.SaveSubmission(&submission); err != nil {
+		// The unique index also protects concurrent retries. The request that
+		// lost the insertion race returns the submission created by the winner.
+		if input.IdempotencyKey != "" {
+			if existing, lookupErr := uc.submissionRepo.GetSubmissionByIdempotencyKey(input.IdempotencyKey); lookupErr == nil {
+				if existing.Progress.UserID != input.UserID {
+					return models.Submission{}, ErrIdempotencyKeyConflict
+				}
+				return *existing, nil
+			}
+		}
 		return models.Submission{}, err
 	}
 
