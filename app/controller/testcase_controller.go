@@ -145,7 +145,7 @@ func bindTestCaseRequest(c *gin.Context) (testCaseRequest, bool) {
 
 func writeTestCaseError(c *gin.Context, err error) {
 	switch {
-	case errors.Is(err, testcase.ErrInvalidInput):
+	case errors.Is(err, testcase.ErrInvalidInput), errors.Is(err, testcase.ErrTooManyTestCases):
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 	case errors.Is(err, gorm.ErrRecordNotFound):
 		c.JSON(http.StatusNotFound, gin.H{"error": "resource not found"})

@@ -40,9 +40,18 @@ func (r *problemRepository) GetProblemByID(id string) (*models.Problem, error) {
 
 func (r *problemRepository) GetAllProblems(isQuiz *bool) ([]models.Problem, error) {
 	var problems []models.Problem
-	query := r.db
+	query := r.db.Model(&models.Problem{})
 	if isQuiz != nil {
 		query = query.Where("is_quiz = ?", *isQuiz)
+	}
+	if isQuiz != nil && !*isQuiz {
+		query = query.Where("EXISTS (SELECT 1 FROM test_cases WHERE test_cases.problem_id = problems.id)")
+		query = query.Order(`CASE difficulty
+			WHEN 'easy' THEN 1
+			WHEN 'medium' THEN 2
+			WHEN 'hard' THEN 3
+			ELSE 4
+		END ASC`)
 	}
 	if err := query.Order("created_at DESC").Find(&problems).Error; err != nil {
 		return nil, err

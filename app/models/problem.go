@@ -5,7 +5,7 @@ import "time"
 const (
 	TagMath           = "math"
 	TagSorting        = "sorting"
-	TagDataStructure  = "data_structure"
+	TagDataStructure  = "Data Structure"
 	TagBruteforce     = "bruteforce"
 	TagImplementation = "implementation"
 )

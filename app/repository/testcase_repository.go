@@ -1,17 +1,46 @@
 package repository
 
 import (
+	"context"
 	"ddp0_grader/app/models"
 	"log"
 
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 type TestCaseRepository interface {
 	GetTestCaseByID(id string) (*models.TestCase, error)
 	GetTestCasesByProblemID(problemID string) ([]models.TestCase, error)
+	CreateTestCaseIfUnderLimit(ctx context.Context, testCase *models.TestCase, limit int) (bool, error)
 	SaveTestCase(testCase *models.TestCase) error
 	DeleteTestCase(testCase *models.TestCase) error
+}
+
+// CreateTestCaseIfUnderLimit serializes testcase creation per problem. Locking
+// the parent problem row prevents concurrent requests from both passing the
+// count check and exceeding the configured limit.
+func (r *testcaseRepository) CreateTestCaseIfUnderLimit(ctx context.Context, testCase *models.TestCase, limit int) (created bool, err error) {
+	err = r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var problem models.Problem
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Select("id").First(&problem, "id = ?", testCase.ProblemID).Error; err != nil {
+			return err
+		}
+
+		var count int64
+		if err := tx.Model(&models.TestCase{}).Where("problem_id = ?", testCase.ProblemID).Count(&count).Error; err != nil {
+			return err
+		}
+		if count >= int64(limit) {
+			return nil
+		}
+		if err := tx.Create(testCase).Error; err != nil {
+			return err
+		}
+		created = true
+		return nil
+	})
+	return created, err
 }
 
 type testcaseRepository struct {

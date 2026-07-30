@@ -2,6 +2,7 @@ package testcase
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"ddp0_grader/app/models"
@@ -25,7 +26,10 @@ func (r *fakeProblemRepository) GetAllProblems(*bool) ([]models.Problem, error) 
 func (r *fakeProblemRepository) SaveProblem(*models.Problem) error              { return nil }
 func (r *fakeProblemRepository) DeleteProblem(*models.Problem) error            { return nil }
 
-type fakeTestCaseRepository struct{ items map[string]models.TestCase }
+type fakeTestCaseRepository struct {
+	items     map[string]models.TestCase
+	createErr error
+}
 
 func (r *fakeTestCaseRepository) GetTestCaseByID(id string) (*models.TestCase, error) {
 	testCase, ok := r.items[id]
@@ -42,6 +46,22 @@ func (r *fakeTestCaseRepository) GetTestCasesByProblemID(problemID string) ([]mo
 		}
 	}
 	return items, nil
+}
+func (r *fakeTestCaseRepository) CreateTestCaseIfUnderLimit(_ context.Context, testCase *models.TestCase, limit int) (bool, error) {
+	if r.createErr != nil {
+		return false, r.createErr
+	}
+	count := 0
+	for _, item := range r.items {
+		if item.ProblemID == testCase.ProblemID {
+			count++
+		}
+	}
+	if count >= limit {
+		return false, nil
+	}
+	r.items[testCase.ID] = *testCase
+	return true, nil
 }
 func (r *fakeTestCaseRepository) SaveTestCase(testCase *models.TestCase) error {
 	r.items[testCase.ID] = *testCase
@@ -98,9 +118,21 @@ func TestGetByProblemIDMasksHiddenTestCaseButAdminReadDoesNot(t *testing.T) {
 }
 
 func TestUseCaseRejectsUnknownProblem(t *testing.T) {
-	useCase := NewUseCase(&fakeProblemRepository{problems: map[string]models.Problem{}}, &fakeTestCaseRepository{items: map[string]models.TestCase{}})
+	useCase := NewUseCase(&fakeProblemRepository{problems: map[string]models.Problem{}}, &fakeTestCaseRepository{items: map[string]models.TestCase{}, createErr: gorm.ErrRecordNotFound})
 	_, err := useCase.Create(context.Background(), CreateInput{ProblemID: "missing"})
 	if err != gorm.ErrRecordNotFound {
 		t.Fatalf("Create() error = %v, want record not found", err)
+	}
+}
+
+func TestUseCaseRejectsEleventhTestCase(t *testing.T) {
+	items := make(map[string]models.TestCase, MaxPerProblem)
+	for i := 0; i < MaxPerProblem; i++ {
+		items[string(rune('a'+i))] = models.TestCase{ID: string(rune('a' + i)), ProblemID: "problem-1"}
+	}
+	useCase := NewUseCase(&fakeProblemRepository{}, &fakeTestCaseRepository{items: items})
+	_, err := useCase.Create(context.Background(), CreateInput{ProblemID: "problem-1", Output: "42"})
+	if !errors.Is(err, ErrTooManyTestCases) {
+		t.Fatalf("Create() error = %v, want %v", err, ErrTooManyTestCases)
 	}
 }

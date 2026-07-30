@@ -11,11 +11,15 @@ import (
 	"github.com/google/uuid"
 )
 
-var ErrInvalidInput = errors.New("invalid testcase input")
+var (
+	ErrInvalidInput     = errors.New("invalid testcase input")
+	ErrTooManyTestCases = errors.New("problem already has the maximum number of testcases")
+)
 
 const (
 	MaxInputBytes  = 64 << 10
 	MaxOutputBytes = 64 << 10
+	MaxPerProblem  = 10
 )
 
 type CreateInput struct {
@@ -49,21 +53,21 @@ func NewUseCase(problemRepo repository.ProblemRepository, testCaseRepo repositor
 	return &useCase{problemRepo: problemRepo, testCaseRepo: testCaseRepo}
 }
 
-func (uc *useCase) Create(_ context.Context, input CreateInput) (models.TestCase, error) {
+func (uc *useCase) Create(ctx context.Context, input CreateInput) (models.TestCase, error) {
 	problemID := strings.TrimSpace(input.ProblemID)
 	if problemID == "" {
 		return models.TestCase{}, ErrInvalidInput
 	}
-	if _, err := uc.problemRepo.GetProblemByID(problemID); err != nil {
-		return models.TestCase{}, err
-	}
-
 	testCase := models.TestCase{ID: uuid.NewString(), ProblemID: problemID}
 	if err := applyInput(&testCase, input.Input, input.Output, input.IsHidden); err != nil {
 		return models.TestCase{}, err
 	}
-	if err := uc.testCaseRepo.SaveTestCase(&testCase); err != nil {
+	created, err := uc.testCaseRepo.CreateTestCaseIfUnderLimit(ctx, &testCase, MaxPerProblem)
+	if err != nil {
 		return models.TestCase{}, err
+	}
+	if !created {
+		return models.TestCase{}, ErrTooManyTestCases
 	}
 	return testCase, nil
 }

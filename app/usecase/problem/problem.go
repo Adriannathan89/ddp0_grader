@@ -139,7 +139,7 @@ func isValidTag(tag string) bool {
 func normalizeTag(value string) string {
 	tag := strings.ToLower(strings.TrimSpace(value))
 	switch tag {
-	case "data structure":
+	case "data structure", "data_structure":
 		return models.TagDataStructure
 	case "brute force":
 		return models.TagBruteforce

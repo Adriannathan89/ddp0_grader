@@ -7,6 +7,7 @@ import (
 
 	"ddp0_grader/app/models"
 	"ddp0_grader/app/repository"
+	"ddp0_grader/app/usecase/testcase"
 	"ddp0_grader/pkg/queue"
 	"ddp0_grader/pkg/runner"
 
@@ -23,7 +24,7 @@ type SubmitInput struct {
 }
 
 const (
-	maxTestCasesPerSubmission = 10
+	maxTestCasesPerSubmission = testcase.MaxPerProblem
 	maxFeedbackBytes          = 4 << 10
 )
 
